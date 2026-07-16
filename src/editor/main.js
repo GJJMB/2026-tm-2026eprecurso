@@ -30,9 +30,14 @@ const els = {
   importLabelBtn: document.getElementById('import-section-label-btn'),
   levelId: document.getElementById('level-id'),
   levelParallax: document.getElementById('level-parallax'),
-  groundTilesetField: document.getElementById('ground-tileset-field'),
-  hazardTilesetField: document.getElementById('hazard-tileset-field'),
-  bgTilesetField: document.getElementById('bg-tileset-field'),
+  tilesetCategorySelect: document.getElementById('tileset-category'),
+  tilesetTypeList: document.getElementById('tileset-type-list'),
+  tilesetAddBtn: document.getElementById('tileset-add-btn'),
+  tilesetModalBackdrop: document.getElementById('tileset-modal-backdrop'),
+  tilesetModal: document.getElementById('tileset-modal'),
+  tilesetModalTitle: document.getElementById('tileset-modal-title'),
+  tilesetModalClose: document.getElementById('tileset-modal-close'),
+  tilesetModalBody: document.getElementById('tileset-modal-body'),
   layerFgBtn: document.getElementById('layer-fg-btn'),
   layerBgBtn: document.getElementById('layer-bg-btn'),
   fgTools: document.getElementById('fg-tools'),
@@ -148,6 +153,12 @@ let isPainting = false;
 let paintValue = CELL.GROUND;
 let levelSections = [];
 
+// Which category the Tileset panel's dropdown/list is showing — purely a UI preference,
+// independent of currentLayer (e.g. you can browse Hazard's tileset while still painting
+// Ground). The char currently open in the side-modal editor, or null when it's closed.
+let tilesetCategory = 'ground'; // 'ground' | 'hazard' | 'background'
+let tilesetModalChar = null;
+
 // Sprite keys available for the "Sprite" appearance mode, fetched once from
 // assets/images/platform-textures.json (the editor is plain static JS, not a Phaser
 // scene, so it can't use PlatformTextures.js's loader — a plain fetch does the same job).
@@ -226,6 +237,7 @@ function addVariant(kind) {
   renderFgToolButtons();
   renderBgToolButtons();
   syncPreview();
+  openTilesetModal(char);
 }
 
 /** Deletes a variant and clears any cells painted with it back to empty — a dangling
@@ -275,59 +287,110 @@ function renderGrid() {
   renderMarkersAndHighlight();
 }
 
+const TILESET_BASE_CHAR = { ground: CELL.GROUND, hazard: CELL.HAZARD, background: CELL.BACKGROUND };
+const TILESET_DEFAULT_COLOR = { ground: DEFAULT_GROUND_COLOR, hazard: DEFAULT_HAZARD_COLOR, background: DEFAULT_BACKGROUND_COLOR };
+
 /**
- * Renders the current section's Ground/Hazard/Background tileset pickers, each as a base
- * appearance field plus any of that kind's variants (see the "Tile variants" section
- * above) with their own appearance field and a remove button, plus an "+ Add variant" button.
+ * Renders the Tileset panel's type list for whichever category (Ground/Hazard/Background)
+ * the dropdown is currently set to — the base type plus any of that kind's variants (see
+ * the "Tile variants" section above), each a clickable row that opens the side-modal
+ * editor (see openTilesetModal) rather than expanding inline.
  */
-function renderTileStyleGroup(container, kindLabel, baseChar, kind, defaultColor) {
-  const chars = [baseChar, ...variantCharsOfKind(kind)];
-  chars.forEach((char, idx) => {
-    const block = document.createElement('div');
-    block.className = 'variant-block';
-    addAppearanceField(
-      block,
-      idx === 0 ? `${kindLabel} appearance` : `${kindLabel} ${idx + 1}`,
-      state.tileStyles[char],
-      defaultColor,
-      () => {
-        syncPreview();
-        refreshGridColors();
-        renderFgToolButtons();
-        renderBgToolButtons();
-      },
-      renderTilesetFields
-    );
-    if (idx > 0) {
-      const removeBtn = document.createElement('button');
-      removeBtn.textContent = 'Remove variant';
-      removeBtn.className = 'danger';
-      removeBtn.style.width = '100%';
-      removeBtn.style.marginTop = '4px';
-      removeBtn.addEventListener('click', () => removeVariant(char));
-      block.appendChild(removeBtn);
+function renderTilesetTypeList() {
+  els.tilesetCategorySelect.value = tilesetCategory;
+  els.tilesetTypeList.innerHTML = '';
+  const baseChar = TILESET_BASE_CHAR[tilesetCategory];
+  const chars = [baseChar, ...variantCharsOfKind(tilesetCategory)];
+
+  chars.forEach((char) => {
+    const li = document.createElement('li');
+    li.className = 'obj-item tileset-row';
+
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = cellSwatchColor(char);
+
+    const label = document.createElement('span');
+    label.className = 'obj-item-label';
+    label.textContent = styleLabel(char);
+
+    li.append(swatch, label);
+    if (state.tileStyles[char] && state.tileStyles[char].texture) {
+      const badge = document.createElement('span');
+      badge.className = 'sprite-badge';
+      badge.textContent = 'sprite';
+      li.appendChild(badge);
     }
-    container.appendChild(block);
+    li.addEventListener('click', () => openTilesetModal(char));
+    els.tilesetTypeList.appendChild(li);
   });
-
-  const addBtn = document.createElement('button');
-  addBtn.textContent = `+ Add ${kindLabel.toLowerCase()} variant`;
-  addBtn.style.width = '100%';
-  addBtn.style.marginTop = '10px';
-  addBtn.addEventListener('click', () => addVariant(kind));
-  container.appendChild(addBtn);
 }
 
+/** Thin wrapper kept so existing call sites (loadState, addVariant, removeVariant, import)
+ * don't need to know about the list/modal split — also closes the side-modal if it was
+ * open for a character that no longer exists in the (possibly just-reloaded) state. */
 function renderTilesetFields() {
-  els.groundTilesetField.innerHTML = '';
-  renderTileStyleGroup(els.groundTilesetField, 'Ground', CELL.GROUND, 'ground', DEFAULT_GROUND_COLOR);
-
-  els.hazardTilesetField.innerHTML = '';
-  renderTileStyleGroup(els.hazardTilesetField, 'Hazard', CELL.HAZARD, 'hazard', DEFAULT_HAZARD_COLOR);
-
-  els.bgTilesetField.innerHTML = '';
-  renderTileStyleGroup(els.bgTilesetField, 'Background', CELL.BACKGROUND, 'background', DEFAULT_BACKGROUND_COLOR);
+  renderTilesetTypeList();
+  if (tilesetModalChar && !state.tileStyles[tilesetModalChar]) closeTilesetModal();
 }
+
+/** Opens the side-modal editor for `char`'s appearance (see editor.html's .side-modal) —
+ * used both right after "+ Add variant" creates a new type and when clicking an existing
+ * row in the Tileset list. */
+function openTilesetModal(char) {
+  tilesetModalChar = char;
+  const isBase = char === CELL.GROUND || char === CELL.HAZARD || char === CELL.BACKGROUND;
+  els.tilesetModalTitle.textContent = styleLabel(char);
+  els.tilesetModalBody.innerHTML = '';
+
+  addAppearanceField(
+    els.tilesetModalBody,
+    'Appearance',
+    state.tileStyles[char],
+    TILESET_DEFAULT_COLOR[tilesetCategory],
+    () => {
+      syncPreview();
+      refreshGridColors();
+      renderFgToolButtons();
+      renderBgToolButtons();
+      renderTilesetTypeList();
+    },
+    () => openTilesetModal(char) // re-render the modal body in place after a Color/Sprite mode switch
+  );
+
+  if (!isBase) {
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = 'Remove variant';
+    removeBtn.className = 'danger';
+    removeBtn.style.width = '100%';
+    removeBtn.style.marginTop = '14px';
+    // removeVariant() re-renders the list and (via renderTilesetFields' check above)
+    // closes this modal itself once the char is actually gone — but confirm() inside it
+    // may be cancelled, so this must NOT unconditionally close the modal here too.
+    removeBtn.addEventListener('click', () => removeVariant(char));
+    els.tilesetModalBody.appendChild(removeBtn);
+  }
+
+  els.tilesetModalBackdrop.classList.remove('hidden');
+  els.tilesetModal.classList.add('open');
+}
+
+function closeTilesetModal() {
+  tilesetModalChar = null;
+  els.tilesetModalBackdrop.classList.add('hidden');
+  els.tilesetModal.classList.remove('open');
+}
+
+els.tilesetCategorySelect.addEventListener('change', () => {
+  tilesetCategory = els.tilesetCategorySelect.value;
+  renderTilesetTypeList();
+});
+els.tilesetAddBtn.addEventListener('click', () => addVariant(tilesetCategory));
+els.tilesetModalClose.addEventListener('click', closeTilesetModal);
+els.tilesetModalBackdrop.addEventListener('click', closeTilesetModal);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && tilesetModalChar) closeTilesetModal();
+});
 
 function cellEl(row, col) {
   return els.grid.children[row * state.cols + col];
@@ -1153,6 +1216,7 @@ function loadState(next) {
   selection = null;
   placingWaypoint = null;
   clearPendingResize();
+  closeTilesetModal();
   els.sectionId.value = state.id;
   els.cols.value = String(state.cols);
   els.rows.value = String(state.rows);

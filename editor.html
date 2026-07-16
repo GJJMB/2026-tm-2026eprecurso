@@ -391,16 +391,6 @@
     .type-toggle button {
       flex: 1;
     }
-    .variant-block {
-      border-top: 1px solid #2c2c3a;
-      padding-top: 10px;
-      margin-top: 10px;
-    }
-    .variant-block:first-child {
-      border-top: none;
-      padding-top: 0;
-      margin-top: 0;
-    }
     .variant-picker {
       display: flex;
       flex-wrap: wrap;
@@ -496,6 +486,75 @@
       margin-top: 8px;
       line-height: 1.5;
     }
+
+    .tileset-row {
+      cursor: pointer;
+    }
+    .tileset-row .sprite-badge {
+      margin-left: auto;
+      flex: none;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #888;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.45);
+      z-index: 100;
+    }
+    .modal-backdrop.hidden {
+      display: none;
+    }
+
+    .side-modal {
+      position: fixed;
+      top: 0;
+      left: 300px;
+      height: 100vh;
+      width: 320px;
+      background: #191924;
+      border-right: 1px solid #2c2c3a;
+      box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+      z-index: 101;
+      padding: 16px;
+      overflow-y: auto;
+      box-sizing: border-box;
+      opacity: 0;
+      transform: translateX(-16px);
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      pointer-events: none;
+    }
+    .side-modal.open {
+      opacity: 1;
+      transform: translateX(0);
+      pointer-events: auto;
+    }
+    .side-modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .side-modal-header span {
+      font-size: 14px;
+      font-weight: bold;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .icon-btn {
+      background: none;
+      padding: 4px 8px;
+      font-size: 13px;
+      color: #999;
+    }
+    .icon-btn:hover {
+      color: #fff;
+      background: #2c2c3a;
+    }
   </style>
 </head>
 <body>
@@ -579,15 +638,23 @@
       </div>
 
       <h2>Tileset (this section)</h2>
-      <div id="ground-tileset-field"></div>
-      <div id="hazard-tileset-field"></div>
-      <div id="bg-tileset-field"></div>
+      <div class="row">
+        <div>
+          <label for="tileset-category">Category</label>
+          <select id="tileset-category">
+            <option value="ground">Ground</option>
+            <option value="hazard">Hazard</option>
+            <option value="background">Background</option>
+          </select>
+        </div>
+      </div>
+      <ul id="tileset-type-list" class="obj-list"></ul>
+      <button id="tileset-add-btn" style="width: 100%;">+ Add variant</button>
       <p class="hint">
-        Each Ground/Hazard/Background brush picks a color or stretched sprite texture — "+
-        Add variant" makes a new brush with its own look (e.g. a second Ground sprite) that
-        shows up as its own tool above and in the Type picker on a selected platform below.
-        Each section keeps its own tileset, so different sections can look completely
-        different even reused across levels.
+        Click a type to edit its color/sprite. "+ Add variant" makes a new brush with its
+        own look (e.g. a second Ground sprite) that shows up as its own tool above and in
+        the Type picker on a selected platform below. Each section keeps its own tileset,
+        so different sections can look completely different even reused across levels.
       </p>
     </div>
 
@@ -683,6 +750,15 @@
     <p class="hint" id="inspector-empty-hint">
       Click an item above (or a marker/tile on the grid) to view and edit its properties.
     </p>
+  </div>
+
+  <div id="tileset-modal-backdrop" class="modal-backdrop hidden"></div>
+  <div id="tileset-modal" class="side-modal">
+    <div class="side-modal-header">
+      <span id="tileset-modal-title">Edit type</span>
+      <button id="tileset-modal-close" class="icon-btn" aria-label="Close">✕</button>
+    </div>
+    <div id="tileset-modal-body"></div>
   </div>
 
   <script type="module" src="src/editor/main.js"></script>

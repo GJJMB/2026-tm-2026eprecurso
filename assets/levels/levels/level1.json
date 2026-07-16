@@ -3,9 +3,6 @@
   "parallax": "level1",
   "cellSize": 40,
   "sections": [
-    "intro",
-    "gap-and-platforms",
-    "moving-platform",
-    "finale"
+    "testtest"
   ]
 }

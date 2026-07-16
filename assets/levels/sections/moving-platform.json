@@ -19,12 +19,12 @@
   "entities": [
     {
       "type": "movingPlatform",
-      "widthCells": 4,
+      "widthCells": 20,
       "waypoints": [
         { "col": 9, "row": 8 },
         { "col": 9, "row": 4 }
       ],
-      "speeds": [70]
+      "speeds": [120]
     },
     {
       "type": "enemyCrawler",
