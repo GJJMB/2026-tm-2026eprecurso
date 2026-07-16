@@ -1,4 +1,5 @@
 import SoundManager from '../audio/SoundManager.js';
+import ParallaxBackground from '../world/ParallaxBackground.js';
 
 export default class BootScene extends Phaser.Scene {
   constructor() {
@@ -6,9 +7,10 @@ export default class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    // Only the sound-events manifest loads here — PreloadScene needs it already
-    // cached before it can know which audio files to queue.
+    // Only the manifests load here — PreloadScene needs them already cached before it
+    // can know which audio/image files to queue.
     SoundManager.queueManifestLoad(this);
+    ParallaxBackground.queueManifestLoad(this);
   }
 
   create() {

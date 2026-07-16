@@ -1,0 +1,7 @@
+{
+
+  "level1": [
+    { "key": "bg-far", "file": "bg-far.png", "factor": 0.15, "depth": -20 },
+    { "key": "bg-near", "file": "bg-near.png", "factor": 0.4, "depth": -10 }
+  ]
+}

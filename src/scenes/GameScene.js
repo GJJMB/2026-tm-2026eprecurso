@@ -1,5 +1,6 @@
 import Stickman from '../entities/Stickman.js';
 import SoundManager from '../audio/SoundManager.js';
+import ParallaxBackground from '../world/ParallaxBackground.js';
 import { t } from '../i18n.js';
 import { showPauseMenu, hidePauseMenu } from '../ui/DomMenus.js';
 
@@ -13,12 +14,14 @@ const GOAL_FLAG_COLOR = 0xffcc33;
 const PIT_START = 900;
 const PIT_WIDTH = 150;
 
+const DEFAULT_LEVEL_KEY = 'level1';
+
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super('GameScene');
   }
 
-  create() {
+  create(data) {
     const width = this.scale.width;
     const height = this.scale.height;
     const levelWidth = Math.max(width * 4, 3000);
@@ -30,6 +33,11 @@ export default class GameScene extends Phaser.Scene {
     // against the world bounds.
     this.physics.world.setBounds(0, 0, levelWidth, height + 400);
     this.cameras.main.setBounds(0, 0, levelWidth, height);
+
+    // Layer set is picked by key (see assets/images/parallax-sets.json) so a future
+    // level-select flow can pass e.g. `this.scene.start('GameScene', { level: 'level2' })`
+    // without any change here.
+    this.parallax = new ParallaxBackground(this, (data && data.level) || DEFAULT_LEVEL_KEY);
 
     this.platforms = [];
     this.movingPlatforms = [];
@@ -171,6 +179,8 @@ export default class GameScene extends Phaser.Scene {
 
   update(time, delta) {
     if (this.finished || this.paused) return;
+
+    this.parallax.update(this.cameras.main.scrollX);
 
     for (const platform of this.movingPlatforms) {
       const { axis, origin, range, speed } = platform._patrol;
