@@ -1,4 +1,4 @@
-import { t } from '../i18n.js';
+import { showGameOverMenu, hideGameOverMenu } from '../ui/DomMenus.js';
 
 export default class GameOverScene extends Phaser.Scene {
   constructor() {
@@ -7,22 +7,24 @@ export default class GameOverScene extends Phaser.Scene {
 
   init(data) {
     this.won = Boolean(data && data.won);
+    this.level = data && data.level;
+    this.nextLevel = data && data.nextLevel;
   }
 
   create() {
-    const { width, height } = this.cameras.main;
+    const restart = () => {
+      hideGameOverMenu();
+      this.scene.start('GameScene', { level: this.level });
+    };
+    const goToNextLevel = this.nextLevel
+      ? () => {
+          hideGameOverMenu();
+          this.scene.start('GameScene', { level: this.nextLevel });
+        }
+      : null;
 
-    this.add
-      .text(width / 2, height / 2 - 40, this.won ? t('gameover.win') : t('gameover.lose'), {
-        fontSize: '36px',
-        color: this.won ? '#7CFC00' : '#ff5555',
-      })
-      .setOrigin(0.5);
-
-    this.add
-      .text(width / 2, height / 2 + 20, t('gameover.restart'), { fontSize: '18px', color: '#cccccc' })
-      .setOrigin(0.5);
-
-    this.input.keyboard.once('keydown-R', () => this.scene.start('GameScene'));
+    showGameOverMenu({ won: this.won, onRestart: restart, onNext: goToNextLevel });
+    this.input.keyboard.once('keydown-R', restart);
+    this.events.once('shutdown', hideGameOverMenu);
   }
 }

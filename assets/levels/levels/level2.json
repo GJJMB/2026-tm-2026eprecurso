@@ -1,0 +1,8 @@
+{
+  "id": "level1",
+  "parallax": "level1",
+  "cellSize": 40,
+  "sections": [
+      "test section"
+  ]
+}

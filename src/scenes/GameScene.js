@@ -1,4 +1,5 @@
 import Stickman from '../entities/Stickman.js';
+import FalseFriend from '../entities/FalseFriend.js';
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
 import LevelLoader from '../world/LevelLoader.js';
@@ -15,8 +16,6 @@ const GOAL_FLAG_COLOR = 0xffcc33;
 
 const DEFAULT_LEVEL_KEY = 'level1';
 const DEFAULT_MOVING_PLATFORM_WIDTH_CELLS = 3;
-const DEFAULT_MOVING_PLATFORM_RANGE = 80;
-const DEFAULT_MOVING_PLATFORM_SPEED = 70;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -35,6 +34,7 @@ export default class GameScene extends Phaser.Scene {
     // world-space tiles/entities, anchored so every section's ground row lands on
     // groundTopY regardless of screen height.
     const levelKey = (data && data.level) || DEFAULT_LEVEL_KEY;
+    this.levelKey = levelKey;
     const plan = LevelLoader.build(this, levelKey, groundTopY);
     const levelWidth = Math.max(plan.levelWidth, width);
 
@@ -74,16 +74,13 @@ export default class GameScene extends Phaser.Scene {
         goalPos = { x: entity.x, yTop: entity.yTop };
       } else if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
         const w = (entity.widthCells || DEFAULT_MOVING_PLATFORM_WIDTH_CELLS) * plan.cellSize;
-        this._addMovingPlatform(entity.x, entity.y, w, plan.cellSize, MOVING_PLATFORM_COLOR, {
-          axis: entity.axis || 'y',
-          range: entity.range || DEFAULT_MOVING_PLATFORM_RANGE,
-          speed: entity.speed || DEFAULT_MOVING_PLATFORM_SPEED,
-        });
+        this._addMovingPlatform(entity.waypoints, w, plan.cellSize, MOVING_PLATFORM_COLOR, entity.speeds);
       }
     }
 
     this._addGoal(goalPos.x, goalPos.yTop);
 
+    // ---- Sound ----
     this.sfx = new SoundManager(this);
 
     this.player = new Stickman(this, spawn.x, spawn.y);
@@ -91,6 +88,18 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.hazards, () => this._finish(false), undefined, this);
     this.physics.add.overlap(this.player, this.goal, () => this._finish(true), undefined, this);
 
+    // ---- FalseFriend – random spawn, away from the player's actual spawn point ----
+    let spawnX;
+    const minSpawn = 200, maxSpawn = levelWidth - 200;
+    do {
+      spawnX = minSpawn + Math.random() * (maxSpawn - minSpawn);
+    } while (Math.abs(spawnX - spawn.x) < 150);
+    this.falseFriend = new FalseFriend(this, spawnX, groundY - 40);
+    this.physics.add.collider(this.falseFriend, this.platforms);
+    this.physics.add.collider(this.player, this.falseFriend);
+    this.physics.add.overlap(this.player, this.falseFriend, this._handlePlayerEnemyCollision, undefined, this);
+
+    // ---- Camera & controls ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setDeadzone(120, 80);
 
@@ -99,6 +108,7 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ESC', () => this._togglePause());
     this.events.once('shutdown', hidePauseMenu);
 
+    // ---- HUD ----
     this.add
       .text(width / 2, 16, t('game.instructions'), {
         fontSize: '14px',
@@ -115,6 +125,21 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(10);
   }
 
+  _handlePlayerEnemyCollision(player, enemy) {
+    if (!enemy.alive) return;
+    const playerBottom = player.y;
+    const enemyTop = enemy.y - 40;
+    if (player.body.velocity.y > 0 && playerBottom < enemyTop + 10) {
+      // Stomp → kill enemy
+      enemy.takeDamage();
+      player.body.setVelocityY(-300);
+      this.sfx.play('jump');
+    } else {
+      this._finish(false);
+    }
+  }
+
+  // ---- helpers ----
   _addPlatform(x, y, w, h, color) {
     const rect = this.add.rectangle(x, y, w, h, color);
     this.physics.add.existing(rect, true);
@@ -122,18 +147,36 @@ export default class GameScene extends Phaser.Scene {
     return rect;
   }
 
-  _addMovingPlatform(x, y, w, h, color, { axis, range, speed }) {
-    const rect = this.add.rectangle(x, y, w, h, color);
+  /**
+   * `waypoints` is a world-space {x,y}[] path (>=2 points); `speeds[i]` is the px/s used
+   * while traversing the segment between waypoints[i] and waypoints[i+1]. The platform
+   * ping-pongs along the path: forward to the last waypoint, then back to the first.
+   */
+  _addMovingPlatform(waypoints, w, h, color, speeds) {
+    const start = waypoints[0];
+    const rect = this.add.rectangle(start.x, start.y, w, h, color);
     this.physics.add.existing(rect);
     rect.body.setAllowGravity(false);
     rect.body.setImmovable(true);
-    rect.body.velocity[axis] = speed;
-    // Simple patrol: real Arcade velocity (not a manually-set position) is what lets
-    // collision separation carry a rider along with the platform for free.
-    rect._patrol = { axis, origin: axis === 'x' ? x : y, range, speed };
+    // Constant Arcade velocity per segment (not a manually-set position) is what lets
+    // collision separation carry a rider along for free; position is only snapped
+    // exactly on waypoint arrival, to stop small per-frame overshoot from drifting.
+    rect._patrol = { waypoints, speeds, segmentIndex: 0, direction: 1 };
+    this._applyPatrolVelocity(rect);
     this.platforms.push(rect);
     this.movingPlatforms.push(rect);
     return rect;
+  }
+
+  _applyPatrolVelocity(platform) {
+    const { waypoints, speeds, segmentIndex, direction } = platform._patrol;
+    const from = direction === 1 ? waypoints[segmentIndex] : waypoints[segmentIndex + 1];
+    const to = direction === 1 ? waypoints[segmentIndex + 1] : waypoints[segmentIndex];
+    const speed = speeds[segmentIndex];
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    platform.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
   }
 
   _addHazard(x, y, w, h, color) {
@@ -146,21 +189,19 @@ export default class GameScene extends Phaser.Scene {
   _addGoal(x, groundTopY) {
     const poleHeight = 70;
     const container = this.add.container(x, groundTopY);
-
     const pole = this.add.rectangle(0, -poleHeight / 2, 4, poleHeight, GOAL_POLE_COLOR);
     const flag = this.add.triangle(0, -poleHeight + 16, 0, -12, 24, -4, 0, 4, GOAL_FLAG_COLOR);
     container.add([pole, flag]);
-
     this.physics.add.existing(container);
     container.body.setAllowGravity(false);
     container.body.setImmovable(true);
     container.body.setSize(30, poleHeight);
     container.body.setOffset(-15, -poleHeight);
-
     this.goal = container;
     return container;
   }
 
+  // ---- pause ----
   _togglePause() {
     if (this.finished) return;
     if (this.paused) this._resume();
@@ -168,9 +209,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _pause() {
-    // Freeze physics instead of this.scene.pause(): a full scene pause also
-    // suspends this scene's own Input Plugin, which would stop the keydown-ESC
-    // listener below from ever firing again to close the menu.
     this.paused = true;
     this.physics.pause();
     showPauseMenu({
@@ -184,7 +222,6 @@ export default class GameScene extends Phaser.Scene {
     this.paused = false;
     this.physics.resume();
     hidePauseMenu();
-    // Drop any key state latched while paused so it can't fire an action (e.g. a jump) on resume.
     this.input.keyboard.resetKeys();
   }
 
@@ -193,39 +230,63 @@ export default class GameScene extends Phaser.Scene {
     this.finished = true;
     this.player.setMove(0);
     this.sfx.play(won ? 'win' : 'lose');
-    this.scene.start('GameOverScene', { won });
+    const nextLevel = won ? LevelLoader.getNextLevelKey(this, this.levelKey) : null;
+    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel });
   }
 
+  // ---- update ----
   update(time, delta) {
     if (this.finished || this.paused) return;
 
     this.parallax.update(this.cameras.main.scrollX);
 
+    // moving platforms
     for (const platform of this.movingPlatforms) {
-      const { axis, origin, range, speed } = platform._patrol;
-      const pos = platform[axis];
-      if (pos > origin + range) platform.body.velocity[axis] = -Math.abs(speed);
-      else if (pos < origin - range) platform.body.velocity[axis] = Math.abs(speed);
+      const patrol = platform._patrol;
+      const targetIdx = patrol.direction === 1 ? patrol.segmentIndex + 1 : patrol.segmentIndex;
+      const target = patrol.waypoints[targetIdx];
+      // Dot product of "vector to target" and current velocity flips sign exactly when
+      // the platform reaches/passes the target, regardless of speed or frame timing —
+      // more robust than a fixed distance epsilon at variable delta.
+      const dot = (target.x - platform.x) * platform.body.velocity.x + (target.y - platform.y) * platform.body.velocity.y;
+      if (dot <= 0) {
+        platform.body.reset(target.x, target.y);
+        if (patrol.direction === 1) {
+          if (patrol.segmentIndex >= patrol.waypoints.length - 2) patrol.direction = -1;
+          else patrol.segmentIndex += 1;
+        } else if (patrol.segmentIndex <= 0) {
+          patrol.direction = 1;
+        } else {
+          patrol.segmentIndex -= 1;
+        }
+        this._applyPatrolVelocity(platform);
+      }
     }
 
+    // player
     const left = this.cursors.left.isDown || this.keys.A.isDown;
     const right = this.cursors.right.isDown || this.keys.D.isDown;
-    const jumpPressed =
-      Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
-
+    const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
     let dir = 0;
     if (left && !right) dir = -1;
     else if (right && !left) dir = 1;
 
     this.player.setMove(dir);
-    if (jumpPressed && this.player.jump()) this.sfx.play('jump');
+    if (jump && this.player.jump()) this.sfx.play('jump');
     this.player.update(time, delta);
 
+    // enemy
+    if (this.falseFriend.alive) {
+      this.falseFriend.update(time, delta, this.player);
+    }
+
+    // death
     if (this.player.y > this.deathY) {
       this._finish(false);
       return;
     }
 
+    // HUD
     this.elapsedMs += delta;
     this.hudText.setText(`${this.hudLabel}: ${(this.elapsedMs / 1000).toFixed(1)}s`);
   }

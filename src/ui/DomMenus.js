@@ -13,6 +13,12 @@ const pmRestart = document.getElementById('pm-restart');
 const pmLeave = document.getElementById('pm-leave');
 const pmClose = document.getElementById('pm-close');
 
+const gameOverMenuEl = document.getElementById('game-over-menu');
+const goTitle = document.getElementById('go-title');
+const goNext = document.getElementById('go-next');
+const goRestart = document.getElementById('go-restart');
+const goHint = document.getElementById('go-hint');
+
 /** Shows the HTML main menu and wires its Start button + language switcher. */
 export function showMainMenu({ onStart }) {
   mmTitle.textContent = t('menu.title');
@@ -72,4 +78,33 @@ export function hidePauseMenu() {
 
 export function isPauseMenuVisible() {
   return !pauseMenuEl.classList.contains('hidden');
+}
+
+/**
+ * Shows the HTML game-over/win overlay and wires its Restart button, plus a Next Level
+ * button when `onNext` is given (only possible on a win with a level after this one in
+ * assets/levels/levels.json's sequence — see LevelLoader.getNextLevelKey).
+ */
+export function showGameOverMenu({ won, onRestart, onNext }) {
+  goTitle.textContent = won ? t('gameover.win') : t('gameover.lose');
+  goTitle.classList.toggle('win', won);
+  goTitle.classList.toggle('lose', !won);
+
+  const hasNext = Boolean(onNext);
+  goNext.classList.toggle('hidden', !hasNext);
+  goNext.classList.toggle('primary', hasNext);
+  goRestart.classList.toggle('primary', !hasNext);
+
+  goNext.textContent = t('gameover.next');
+  goRestart.textContent = t('pause.restart');
+  goHint.textContent = t('gameover.restart');
+
+  goNext.onclick = hasNext ? () => onNext() : null;
+  goRestart.onclick = () => onRestart();
+
+  gameOverMenuEl.classList.remove('hidden');
+}
+
+export function hideGameOverMenu() {
+  gameOverMenuEl.classList.add('hidden');
 }
