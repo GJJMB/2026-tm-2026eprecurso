@@ -38,6 +38,33 @@
       margin-top: 0;
     }
 
+    .editor-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid #2c2c3a;
+    }
+    .editor-tab {
+      flex: 1;
+      background: none;
+      border-radius: 6px 6px 0 0;
+      padding: 8px 6px;
+      font-size: 12px;
+      color: #999;
+    }
+    .editor-tab:hover {
+      background: #22222e;
+      color: #ddd;
+    }
+    .editor-tab.active {
+      background: #26263a;
+      color: #fff;
+      box-shadow: inset 0 -2px 0 #4a6cf7;
+    }
+    .tab-panel.hidden {
+      display: none;
+    }
+
     #sidebar {
       width: 300px;
       flex: none;
@@ -457,69 +484,90 @@
   <div id="sidebar">
     <h1>Level Editor</h1>
 
-    <h2>Section</h2>
-    <div class="row">
-      <div>
-        <label for="section-id">Section id</label>
-        <input type="text" id="section-id" value="new-section" />
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label for="section-cols">Cols</label>
-        <input type="number" id="section-cols" min="4" max="60" value="20" />
-      </div>
-      <div>
-        <label for="section-rows">Rows</label>
-        <input type="number" id="section-rows" min="4" max="30" value="12" />
-      </div>
-    </div>
-    <div class="row">
-      <button id="resize-btn">Resize / clear</button>
-      <button id="new-btn">New blank</button>
+    <div class="editor-tabs">
+      <button class="editor-tab active" data-tab="section">Section</button>
+      <button class="editor-tab" data-tab="tiles">Tiles</button>
+      <button class="editor-tab" data-tab="entities">Entities</button>
     </div>
 
-    <h2>Layer</h2>
-    <div class="type-toggle" style="margin-bottom: 8px;">
-      <button id="layer-fg-btn" class="primary" data-layer="foreground">Foreground</button>
-      <button id="layer-bg-btn" data-layer="background">Background</button>
-    </div>
-    <p class="hint">
-      Foreground holds interactable Ground/Hazard tiles and entities — this is what the
-      player collides with. Background holds purely decorative ground-equivalent sprites
-      behind the action; it never collides and can't hold entities.
-    </p>
+    <div id="tab-section" class="tab-panel" data-tab-panel="section">
+      <h2>Section</h2>
+      <div class="row">
+        <div>
+          <label for="section-id">Section id</label>
+          <input type="text" id="section-id" value="new-section" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="section-cols">Cols</label>
+          <input type="number" id="section-cols" min="4" max="60" value="20" />
+        </div>
+        <div>
+          <label for="section-rows">Rows</label>
+          <input type="number" id="section-rows" min="4" max="30" value="12" />
+        </div>
+      </div>
+      <div class="row">
+        <button id="resize-btn">Resize / clear</button>
+        <button id="new-btn">New blank</button>
+      </div>
 
-    <h2>Tiles</h2>
-    <div id="fg-tools">
-      <div class="tool-grid" id="fg-tool-grid"></div>
+      <h2>Section JSON</h2>
+      <div class="row">
+        <button id="export-section-btn" class="primary">Download section JSON</button>
+      </div>
+      <div class="row">
+        <label class="file-btn">
+          <button type="button" id="import-section-label-btn">Load section JSON…</button>
+          <input type="file" id="import-section-file" accept="application/json" />
+        </label>
+      </div>
+    </div>
+
+    <div id="tab-tiles" class="tab-panel hidden" data-tab-panel="tiles">
+      <h2>Layer</h2>
+      <div class="type-toggle" style="margin-bottom: 8px;">
+        <button id="layer-fg-btn" class="primary" data-layer="foreground">Foreground</button>
+        <button id="layer-bg-btn" data-layer="background">Background</button>
+      </div>
       <p class="hint">
-        Drag to paint. The highlighted bottom row is the ground baseline every section
-        anchors to. Each brush below is its own sprite/color — add more in the Tileset
-        section to paint several distinct-looking Ground/Hazard tiles in one section.
+        Foreground holds interactable Ground/Hazard tiles and entities — this is what the
+        player collides with. Background holds purely decorative ground-equivalent sprites
+        behind the action; it never collides and can't hold entities.
+      </p>
+
+      <h2>Tiles</h2>
+      <div id="fg-tools">
+        <div class="tool-grid" id="fg-tool-grid"></div>
+        <p class="hint">
+          Drag to paint. The highlighted bottom row is the ground baseline every section
+          anchors to. Each brush below is its own sprite/color — add more in the Tileset
+          section to paint several distinct-looking Ground/Hazard tiles in one section.
+        </p>
+      </div>
+      <div id="bg-tools" class="hidden">
+        <div class="tool-grid" id="bg-tool-grid"></div>
+        <p class="hint">
+          Drag to paint decorative background tiles. These sit behind everything else and
+          never block or collide with the player.
+        </p>
+      </div>
+
+      <h2>Tileset (this section)</h2>
+      <div id="ground-tileset-field"></div>
+      <div id="hazard-tileset-field"></div>
+      <div id="bg-tileset-field"></div>
+      <p class="hint">
+        Each Ground/Hazard/Background brush picks a color or stretched sprite texture — "+
+        Add variant" makes a new brush with its own look (e.g. a second Ground sprite) that
+        shows up as its own tool above and in the Type picker on a selected platform below.
+        Each section keeps its own tileset, so different sections can look completely
+        different even reused across levels.
       </p>
     </div>
-    <div id="bg-tools" class="hidden">
-      <div class="tool-grid" id="bg-tool-grid"></div>
-      <p class="hint">
-        Drag to paint decorative background tiles. These sit behind everything else and
-        never block or collide with the player.
-      </p>
-    </div>
 
-    <h2>Tileset (this section)</h2>
-    <div id="ground-tileset-field"></div>
-    <div id="hazard-tileset-field"></div>
-    <div id="bg-tileset-field"></div>
-    <p class="hint">
-      Each Ground/Hazard/Background brush picks a color or stretched sprite texture — "+
-      Add variant" makes a new brush with its own look (e.g. a second Ground sprite) that
-      shows up as its own tool above and in the Type picker on a selected platform below.
-      Each section keeps its own tileset, so different sections can look completely
-      different even reused across levels.
-    </p>
-
-    <div id="entities-section">
+    <div id="tab-entities" class="tab-panel hidden" data-tab-panel="entities">
       <h2>Entities</h2>
       <div class="entity-tabs">
         <button class="tool-btn entity-tab" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
@@ -533,19 +581,10 @@
         Click an empty cell to place the selected entity (Spawn/Goal are singletons —
         placing a new one moves the old; Moving/enemies allow any number). Already-placed
         entities and platform tiles are listed in the right sidebar — select one there (or
-        click its marker/tile here) to edit its properties.
+        click its marker/tile here) to edit its properties. Selecting this tab switches the
+        Tiles tab back to the Foreground layer, since entities can't live on the Background
+        layer.
       </p>
-    </div>
-
-    <h2>Section JSON</h2>
-    <div class="row">
-      <button id="export-section-btn" class="primary">Download section JSON</button>
-    </div>
-    <div class="row">
-      <label class="file-btn">
-        <button type="button" id="import-section-label-btn">Load section JSON…</button>
-        <input type="file" id="import-section-file" accept="application/json" />
-      </label>
     </div>
 
     <h2>Level sequence</h2>
