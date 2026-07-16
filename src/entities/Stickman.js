@@ -1,5 +1,7 @@
-const LIMB_COLOR = 0xffffff;
+const LIMB_COLOR = 0x1a1a2a;        // dark base
+const GLOW_COLOR = 0x00ccff;        // neon cyan glow
 const LIMB_WIDTH = 3;
+const GLOW_WIDTH = 8;
 
 const HEAD_RADIUS = 8;
 const HEAD_Y = -56;
@@ -14,7 +16,7 @@ const MAX_ARM_SWING = Phaser.Math.DegToRad(30);
 const IDLE_SWAY = Phaser.Math.DegToRad(4);
 const IDLE_LEG_STANCE = Phaser.Math.DegToRad(7);
 const IDLE_ARM_STANCE = Phaser.Math.DegToRad(14);
-const GAIT_SPEED_FOR_FULL_CYCLE = 220; // px/s of horizontal speed that maps to a fast walk cycle
+const GAIT_SPEED_FOR_FULL_CYCLE = 220;
 
 const MOVE_ACCEL = 900;
 const MAX_SPEED_X = 260;
@@ -22,12 +24,10 @@ const MAX_SPEED_Y = 900;
 const DRAG_X = 1400;
 const JUMP_VELOCITY = -480;
 
-/**
- * A stickman that IS the Arcade Physics body (gravity/velocity/collision live on
- * this container directly). Its pose is not spritesheet frames — every limb angle
- * is computed each frame from movement state (grounded/airborne/speed) and redrawn
- * as line segments pivoting from shoulder/hip points, like simple forward kinematics.
- */
+// --- Impact / landing reaction (only squash, no leg modification) ---
+const HIT_DURATION = 0.2;           // seconds
+const SQUASH_FACTOR = 0.2;          // vertical scale reduction
+
 export default class Stickman extends Phaser.GameObjects.Container {
   constructor(scene, x, y) {
     super(scene, x, y);
@@ -47,6 +47,10 @@ export default class Stickman extends Phaser.GameObjects.Container {
     this.gaitPhase = 0;
     this.idlePhase = 0;
     this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0 };
+
+    // --- Hit reaction ---
+    this.hitTime = 0;                // remaining hit duration
+    this.wasGrounded = false;        // track landing
 
     this.draw();
   }
@@ -75,8 +79,21 @@ export default class Stickman extends Phaser.GameObjects.Container {
     const speed = this.body.velocity.x;
     const absSpeed = Math.abs(speed);
 
-    this.setScale(this.facing, 1);
+    // --- Detect landing ---
+    const isGrounded = this.grounded;
+    if (isGrounded && !this.wasGrounded) {
+      // Landed: trigger hit reaction
+      this.hitTime = HIT_DURATION;
+    }
+    this.wasGrounded = isGrounded;
 
+    // --- Update hit timer ---
+    if (this.hitTime > 0) {
+      this.hitTime -= dt;
+      if (this.hitTime < 0) this.hitTime = 0;
+    }
+
+    // --- Pose update (original symmetric leg movement) ---
     if (!this.grounded) {
       this._updateAirbornePose();
     } else if (absSpeed > 8) {
@@ -89,8 +106,6 @@ export default class Stickman extends Phaser.GameObjects.Container {
   }
 
   _updateAirbornePose() {
-    // Scissor pose: legs/arms mirror each other so a held jump reads as a spread
-    // silhouette instead of converging onto a single overlapping line.
     const rising = this.body.velocity.y < 0;
     const legTarget = rising ? Phaser.Math.DegToRad(-30) : Phaser.Math.DegToRad(20);
     const armTarget = rising ? Phaser.Math.DegToRad(20) : Phaser.Math.DegToRad(-10);
@@ -107,6 +122,7 @@ export default class Stickman extends Phaser.GameObjects.Container {
     const cycleRate = 2 + (absSpeed / GAIT_SPEED_FOR_FULL_CYCLE) * 6;
     this.gaitPhase += dt * cycleRate;
 
+    // --- Original symmetric swing (no random offsets) ---
     const swing = Math.sin(this.gaitPhase);
     this.pose.leftLeg = swing * MAX_LEG_SWING;
     this.pose.rightLeg = -swing * MAX_LEG_SWING;
@@ -131,23 +147,56 @@ export default class Stickman extends Phaser.GameObjects.Container {
     const g = this.gfx;
     g.clear();
 
+    // --- Compute hit intensity (0..1) ---
+    let hitIntensity = 0;
+    if (this.hitTime > 0) {
+      hitIntensity = this.hitTime / HIT_DURATION;  // 1 at impact, 0 when done
+    }
+
+    // --- Apply squash (vertical scale reduction) only ---
+    const squash = 1 - hitIntensity * SQUASH_FACTOR;
+    this.setScale(this.facing, squash);
+
     const bob = this.pose.bob || 0;
-    const headY = HEAD_Y + bob;
-    const shoulderY = SHOULDER_Y + bob;
-    const hipY = HIP_Y + bob * 0.5;
+    const headY = (HEAD_Y + bob) * squash;
+    const shoulderY = (SHOULDER_Y + bob) * squash;
+    const hipY = (HIP_Y + bob * 0.5) * squash;
 
-    g.lineStyle(LIMB_WIDTH, LIMB_COLOR, 1);
-
+    // --- Glow passes (broad) ---
+    g.lineStyle(GLOW_WIDTH, GLOW_COLOR, 0.15);
     this._drawLimb(0, hipY, this.pose.leftLeg, LEG_LENGTH);
     this._drawLimb(0, hipY, this.pose.rightLeg, LEG_LENGTH);
-
     g.lineBetween(0, shoulderY, 0, hipY);
+    this._drawLimb(0, shoulderY, this.pose.leftArm, ARM_LENGTH);
+    this._drawLimb(0, shoulderY, this.pose.rightArm, ARM_LENGTH);
+    g.fillStyle(GLOW_COLOR, 0.15);
+    g.fillCircle(0, headY - HEAD_RADIUS, HEAD_RADIUS + 4);
 
+    // --- Glow passes (tighter) ---
+    g.lineStyle(5, GLOW_COLOR, 0.25);
+    this._drawLimb(0, hipY, this.pose.leftLeg, LEG_LENGTH);
+    this._drawLimb(0, hipY, this.pose.rightLeg, LEG_LENGTH);
+    g.lineBetween(0, shoulderY, 0, hipY);
+    this._drawLimb(0, shoulderY, this.pose.leftArm, ARM_LENGTH);
+    this._drawLimb(0, shoulderY, this.pose.rightArm, ARM_LENGTH);
+    g.fillStyle(GLOW_COLOR, 0.25);
+    g.fillCircle(0, headY - HEAD_RADIUS, HEAD_RADIUS + 2);
+
+    // --- Main dark limbs (original symmetry) ---
+    g.lineStyle(LIMB_WIDTH, LIMB_COLOR, 1);
+    this._drawLimb(0, hipY, this.pose.leftLeg, LEG_LENGTH);
+    this._drawLimb(0, hipY, this.pose.rightLeg, LEG_LENGTH);
+    g.lineBetween(0, shoulderY, 0, hipY);
     this._drawLimb(0, shoulderY, this.pose.leftArm, ARM_LENGTH);
     this._drawLimb(0, shoulderY, this.pose.rightArm, ARM_LENGTH);
 
+    // --- Head ---
     g.fillStyle(LIMB_COLOR, 1);
     g.fillCircle(0, headY - HEAD_RADIUS, HEAD_RADIUS);
+
+    // --- Head glow highlight ---
+    g.fillStyle(GLOW_COLOR, 0.12);
+    g.fillCircle(2, headY - HEAD_RADIUS - 2, HEAD_RADIUS * 0.5);
   }
 
   _drawLimb(pivotX, pivotY, angle, length) {
