@@ -478,6 +478,24 @@
       padding: 6px 8px;
       margin-top: 6px;
     }
+    #resize-btn.confirm-danger {
+      background: #d1495b;
+      color: #fff;
+      flex: 1.4;
+    }
+    #resize-btn.confirm-danger:hover {
+      background: #e0596b;
+    }
+    #resize-warning {
+      font-size: 11px;
+      color: #ff9a9a;
+      background: #2a1418;
+      border: 1px solid #5c2430;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -501,17 +519,23 @@
       <div class="row">
         <div>
           <label for="section-cols">Cols</label>
-          <input type="number" id="section-cols" min="4" max="60" value="20" />
+          <input type="number" id="section-cols" min="4" max="256" value="20" />
         </div>
         <div>
           <label for="section-rows">Rows</label>
-          <input type="number" id="section-rows" min="4" max="30" value="12" />
+          <input type="number" id="section-rows" min="4" max="64" value="12" />
         </div>
       </div>
       <div class="row">
-        <button id="resize-btn">Resize / clear</button>
+        <button id="resize-btn">Resize</button>
         <button id="new-btn">New blank</button>
       </div>
+      <p class="hint" id="resize-warning-hint">
+        Resizing keeps your existing grid/entities — new rows are added above (so the
+        ground row stays anchored at the bottom) and new columns at the right. Shrinking
+        past painted content deletes it.
+      </p>
+      <div id="resize-warning" class="hidden"></div>
 
       <h2>Section JSON</h2>
       <div class="row">

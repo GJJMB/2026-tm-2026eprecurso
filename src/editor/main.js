@@ -18,6 +18,7 @@ const els = {
   cols: document.getElementById('section-cols'),
   rows: document.getElementById('section-rows'),
   resizeBtn: document.getElementById('resize-btn'),
+  resizeWarning: document.getElementById('resize-warning'),
   newBtn: document.getElementById('new-btn'),
   fgToolGrid: document.getElementById('fg-tool-grid'),
   bgToolGrid: document.getElementById('bg-tool-grid'),
@@ -1151,6 +1152,7 @@ function loadState(next) {
   state = next;
   selection = null;
   placingWaypoint = null;
+  clearPendingResize();
   els.sectionId.value = state.id;
   els.cols.value = String(state.cols);
   els.rows.value = String(state.rows);
@@ -1171,12 +1173,156 @@ els.newBtn.addEventListener('click', () => {
   loadState(makeBlankState('new-section', DEFAULT_COLS, DEFAULT_ROWS));
 });
 
+// --- Resize (non-destructive) ---
+//
+// Resizing keeps everything that still fits: new columns are added at the right (and
+// removed from the right when shrinking — see MAX_COLS), matching how the grid is
+// addressed left-to-right. Rows instead shift so the ground row (always the grid's last
+// row — see levelFormat.js's docstring) stays anchored at the bottom: new rows are added
+// above, and shrinking removes from the top. If that shift would push any painted tile or
+// entity outside the new bounds, the resize doesn't happen immediately — the button arms
+// into a red "Confirm?" state listing what would be deleted, and a second click on the
+// same target size actually applies it.
+const MAX_COLS = 256;
+const MAX_ROWS = 64;
+
+let pendingResize = null; // { cols, rows, rowOffset, losses } | null
+
+function clearPendingResize() {
+  pendingResize = null;
+  els.resizeBtn.textContent = 'Resize';
+  els.resizeBtn.classList.remove('confirm-danger');
+  els.resizeWarning.classList.add('hidden');
+  els.resizeWarning.innerHTML = '';
+}
+
+function renderResizeWarning(losses) {
+  els.resizeWarning.innerHTML = '';
+  const intro = document.createElement('p');
+  intro.style.margin = '0 0 4px';
+  intro.textContent = `This resize deletes ${losses.length} item${losses.length === 1 ? '' : 's'}:`;
+  els.resizeWarning.appendChild(intro);
+
+  const list = document.createElement('ul');
+  list.style.margin = '0';
+  list.style.paddingLeft = '16px';
+  const shown = losses.slice(0, 12);
+  shown.forEach((label) => {
+    const li = document.createElement('li');
+    li.textContent = label;
+    list.appendChild(li);
+  });
+  if (losses.length > shown.length) {
+    const li = document.createElement('li');
+    li.textContent = `…and ${losses.length - shown.length} more`;
+    list.appendChild(li);
+  }
+  els.resizeWarning.appendChild(list);
+  els.resizeWarning.classList.remove('hidden');
+}
+
+/** Every painted tile/entity that would fall outside a resize to `cols`x`rows`, plus the
+ * row shift (see the comment above) that resize would apply. */
+function computeResizeImpact(cols, rows) {
+  const rowOffset = rows - state.rows;
+  const losses = [];
+
+  const checkGrid = (grid, layerLabel) => {
+    for (let r = 0; r < state.rows; r++) {
+      for (let c = 0; c < state.cols; c++) {
+        if (grid[r][c] === CELL.EMPTY) continue;
+        const newRow = r + rowOffset;
+        if (newRow < 0 || newRow >= rows || c >= cols) {
+          losses.push(`${layerLabel} tile at col ${c}, row ${r}`);
+        }
+      }
+    }
+  };
+  checkGrid(state.grid, 'Foreground');
+  checkGrid(state.bgGrid, 'Background');
+
+  state.entities.forEach((entity) => {
+    if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
+      const outOfBounds = entity.waypoints.some((wp) => {
+        const newRow = wp.row + rowOffset;
+        return newRow < 0 || newRow >= rows || wp.col < 0 || wp.col >= cols;
+      });
+      if (outOfBounds) losses.push('Moving Platform entity');
+    } else {
+      const newRow = entity.row + rowOffset;
+      if (newRow < 0 || newRow >= rows || entity.col < 0 || entity.col >= cols) {
+        losses.push(`${ENTITY_LABELS[entity.type] || entity.type} entity at col ${entity.col}, row ${entity.row}`);
+      }
+    }
+  });
+
+  return { rowOffset, losses };
+}
+
+/** Applies a resize to `cols`x`rows`, remapping every existing tile/entity per the row
+ * shift described above (col 0 always keeps its meaning) and dropping anything that lands
+ * outside the new bounds — computeResizeImpact should already have warned about those. */
+function applyResize(cols, rows, rowOffset) {
+  const remapGrid = (grid) => {
+    const result = [];
+    for (let newRow = 0; newRow < rows; newRow++) {
+      const oldRow = newRow - rowOffset;
+      const rowChars = [];
+      for (let newCol = 0; newCol < cols; newCol++) {
+        rowChars.push(oldRow >= 0 && oldRow < state.rows && newCol < state.cols ? grid[oldRow][newCol] : CELL.EMPTY);
+      }
+      result.push(rowChars);
+    }
+    return result;
+  };
+
+  const remapEntity = (entity) => {
+    if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
+      const waypoints = entity.waypoints.map((wp) => ({ col: wp.col, row: wp.row + rowOffset }));
+      const outOfBounds = waypoints.some((wp) => wp.row < 0 || wp.row >= rows || wp.col < 0 || wp.col >= cols);
+      return outOfBounds ? null : { ...entity, waypoints };
+    }
+    const row = entity.row + rowOffset;
+    const outOfBounds = row < 0 || row >= rows || entity.col < 0 || entity.col >= cols;
+    return outOfBounds ? null : { ...entity, row };
+  };
+
+  loadState({
+    id: state.id,
+    cols,
+    rows,
+    grid: remapGrid(state.grid),
+    bgGrid: remapGrid(state.bgGrid),
+    entities: state.entities.map(remapEntity).filter(Boolean),
+    tileStyles: state.tileStyles,
+  });
+}
+
 els.resizeBtn.addEventListener('click', () => {
-  const cols = Math.max(4, Math.min(60, Number(els.cols.value) || DEFAULT_COLS));
-  const rows = Math.max(4, Math.min(30, Number(els.rows.value) || DEFAULT_ROWS));
-  if (!confirm('Resizing clears the current grid and entities. Continue?')) return;
-  loadState(makeBlankState(els.sectionId.value.trim() || 'section', cols, rows));
+  const cols = Math.max(4, Math.min(MAX_COLS, Number(els.cols.value) || DEFAULT_COLS));
+  const rows = Math.max(4, Math.min(MAX_ROWS, Number(els.rows.value) || DEFAULT_ROWS));
+
+  if (pendingResize && pendingResize.cols === cols && pendingResize.rows === rows) {
+    applyResize(cols, rows, pendingResize.rowOffset);
+    clearPendingResize();
+    return;
+  }
+
+  const { rowOffset, losses } = computeResizeImpact(cols, rows);
+  if (losses.length === 0) {
+    applyResize(cols, rows, rowOffset);
+    clearPendingResize();
+    return;
+  }
+
+  pendingResize = { cols, rows, rowOffset, losses };
+  els.resizeBtn.textContent = 'Confirm?';
+  els.resizeBtn.classList.add('confirm-danger');
+  renderResizeWarning(losses);
 });
+
+els.cols.addEventListener('input', clearPendingResize);
+els.rows.addEventListener('input', clearPendingResize);
 
 els.sectionId.addEventListener('input', () => {
   state.id = els.sectionId.value.trim() || 'section';
