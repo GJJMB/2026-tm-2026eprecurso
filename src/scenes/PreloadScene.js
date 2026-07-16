@@ -1,5 +1,6 @@
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
+import LevelLoader from '../world/LevelLoader.js';
 import { queueLocaleLoads, initLocales } from '../i18n.js';
 
 export default class PreloadScene extends Phaser.Scene {
@@ -23,8 +24,9 @@ export default class PreloadScene extends Phaser.Scene {
     queueLocaleLoads(this);
 
     // No level has been chosen yet at this point in the flow, so preload every
-    // parallax set the manifest knows about; GameScene picks one by key at create().
+    // parallax set and every level's sections; GameScene picks a level by key at create().
     ParallaxBackground.queueImageLoads(this);
+    LevelLoader.queueSectionLoads(this);
   }
 
   create() {

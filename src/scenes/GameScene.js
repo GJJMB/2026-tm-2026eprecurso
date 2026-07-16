@@ -1,6 +1,8 @@
 import Stickman from '../entities/Stickman.js';
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
+import LevelLoader from '../world/LevelLoader.js';
+import { CELL, ENTITY_TYPES } from '../world/levelFormat.js';
 import { t } from '../i18n.js';
 import { showPauseMenu, hidePauseMenu } from '../ui/DomMenus.js';
 
@@ -11,10 +13,10 @@ const HAZARD_COLOR = 0xd1495b;
 const GOAL_POLE_COLOR = 0xd8d8d8;
 const GOAL_FLAG_COLOR = 0xffcc33;
 
-const PIT_START = 900;
-const PIT_WIDTH = 150;
-
 const DEFAULT_LEVEL_KEY = 'level1';
+const DEFAULT_MOVING_PLATFORM_WIDTH_CELLS = 3;
+const DEFAULT_MOVING_PLATFORM_RANGE = 80;
+const DEFAULT_MOVING_PLATFORM_SPEED = 70;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -24,20 +26,25 @@ export default class GameScene extends Phaser.Scene {
   create(data) {
     const width = this.scale.width;
     const height = this.scale.height;
-    const levelWidth = Math.max(width * 4, 3000);
     const groundY = height - 24;
     const groundTopY = groundY - 24;
 
-    // Extra headroom below the visible ground so falling into the pit is a real
+    // Level is picked by key (see assets/levels/levels.json) so a future level-select
+    // flow can pass e.g. `this.scene.start('GameScene', { level: 'level2' })` without
+    // any change here. LevelLoader strings the level's pre-made sections together into
+    // world-space tiles/entities, anchored so every section's ground row lands on
+    // groundTopY regardless of screen height.
+    const levelKey = (data && data.level) || DEFAULT_LEVEL_KEY;
+    const plan = LevelLoader.build(this, levelKey, groundTopY);
+    const levelWidth = Math.max(plan.levelWidth, width);
+
+    // Extra headroom below the visible ground so falling into a pit is a real
     // fall (camera just won't follow that far down) rather than an instant stop
     // against the world bounds.
     this.physics.world.setBounds(0, 0, levelWidth, height + 400);
     this.cameras.main.setBounds(0, 0, levelWidth, height);
 
-    // Layer set is picked by key (see assets/images/parallax-sets.json) so a future
-    // level-select flow can pass e.g. `this.scene.start('GameScene', { level: 'level2' })`
-    // without any change here.
-    this.parallax = new ParallaxBackground(this, (data && data.level) || DEFAULT_LEVEL_KEY);
+    this.parallax = new ParallaxBackground(this, plan.parallax || levelKey);
 
     this.platforms = [];
     this.movingPlatforms = [];
@@ -47,27 +54,39 @@ export default class GameScene extends Phaser.Scene {
     this.elapsedMs = 0;
     this.deathY = height + 150;
 
-    const pitEnd = PIT_START + PIT_WIDTH;
-    this._addPlatform(PIT_START / 2, groundY, PIT_START, 48, GROUND_COLOR);
-    this._addPlatform(pitEnd + (levelWidth - pitEnd) / 2, groundY, levelWidth - pitEnd, 48, GROUND_COLOR);
+    let spawn = { x: 80, y: groundY - 80 };
+    let goalPos = { x: levelWidth - 80, yTop: groundTopY };
 
-    this._addPlatform(420, groundY - 120, 160, 24, PLATFORM_COLOR);
-    this._addPlatform(720, groundY - 200, 160, 24, PLATFORM_COLOR);
-    this._addPlatform(1040, groundY - 120, 160, 24, PLATFORM_COLOR);
+    for (const tile of plan.tiles) {
+      const cx = tile.x + tile.w / 2;
+      const cy = tile.y + tile.h / 2;
+      if (tile.type === CELL.HAZARD) {
+        this._addHazard(cx, cy, tile.w, tile.h, HAZARD_COLOR);
+      } else {
+        this._addPlatform(cx, cy, tile.w, tile.h, tile.isGroundRow ? GROUND_COLOR : PLATFORM_COLOR);
+      }
+    }
 
-    this._addMovingPlatform(1700, groundY - 160, 140, 24, MOVING_PLATFORM_COLOR, {
-      axis: 'y',
-      range: 80,
-      speed: 70,
-    });
+    for (const entity of plan.entities) {
+      if (entity.type === ENTITY_TYPES.PLAYER_SPAWN) {
+        spawn = { x: entity.x, y: entity.y };
+      } else if (entity.type === ENTITY_TYPES.GOAL) {
+        goalPos = { x: entity.x, yTop: entity.yTop };
+      } else if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
+        const w = (entity.widthCells || DEFAULT_MOVING_PLATFORM_WIDTH_CELLS) * plan.cellSize;
+        this._addMovingPlatform(entity.x, entity.y, w, plan.cellSize, MOVING_PLATFORM_COLOR, {
+          axis: entity.axis || 'y',
+          range: entity.range || DEFAULT_MOVING_PLATFORM_RANGE,
+          speed: entity.speed || DEFAULT_MOVING_PLATFORM_SPEED,
+        });
+      }
+    }
 
-    this._addHazard(1300, groundTopY - 10, 60, 20, HAZARD_COLOR);
-
-    this._addGoal(levelWidth - 80, groundTopY);
+    this._addGoal(goalPos.x, goalPos.yTop);
 
     this.sfx = new SoundManager(this);
 
-    this.player = new Stickman(this, 80, groundY - 80);
+    this.player = new Stickman(this, spawn.x, spawn.y);
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.overlap(this.player, this.hazards, () => this._finish(false), undefined, this);
     this.physics.add.overlap(this.player, this.goal, () => this._finish(true), undefined, this);

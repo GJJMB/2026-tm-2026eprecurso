@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Stickman Runner — Level Editor</title>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #1d1d2b;
+      color: #ddd;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }
+    body {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    h1 {
+      font-size: 16px;
+      margin: 0 0 12px;
+      color: #fff;
+    }
+    h2 {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin: 20px 0 8px;
+      color: #888;
+    }
+    h2:first-of-type {
+      margin-top: 0;
+    }
+
+    #sidebar {
+      width: 300px;
+      flex: none;
+      padding: 16px;
+      background: #191924;
+      border-right: 1px solid #2c2c3a;
+      overflow-y: auto;
+    }
+
+    #main {
+      flex: 1;
+      overflow: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 4px;
+    }
+    input[type="text"], input[type="number"], textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: #12121a;
+      border: 1px solid #3a3a4a;
+      border-radius: 6px;
+      color: #eee;
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+    textarea {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 11px;
+      resize: vertical;
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .row > div {
+      flex: 1;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+      background: #2c2c3a;
+      color: #ddd;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+    button:hover {
+      background: #3a3a4e;
+    }
+    button.primary {
+      background: #4a6cf7;
+      color: #fff;
+    }
+    button.primary:hover {
+      background: #5c7bff;
+    }
+    button.danger:hover {
+      background: #7a2c3a;
+    }
+
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: flex-start;
+      padding: 8px;
+      text-align: left;
+    }
+    .tool-btn.active {
+      outline: 2px solid #00ccff;
+      background: #26263a;
+    }
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      flex: none;
+      display: inline-block;
+    }
+
+    #grid-wrap {
+      background: #14141d;
+      border: 1px solid #2c2c3a;
+      border-radius: 8px;
+      padding: 12px;
+      overflow: auto;
+      max-width: 100%;
+    }
+    #grid {
+      display: grid;
+      gap: 1px;
+      background: #2c2c3a;
+      user-select: none;
+    }
+    .cell {
+      width: 28px;
+      height: 28px;
+      background: #1d1d2b;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      color: #fff;
+      cursor: pointer;
+      position: relative;
+    }
+    .cell.ground-row {
+      box-shadow: inset 0 -3px 0 rgba(0, 204, 255, 0.35);
+    }
+    .cell[data-type="G"] {
+      background: #4a4a5e;
+    }
+    .cell[data-type="H"] {
+      background: #d1495b;
+    }
+    .cell:hover {
+      outline: 1px solid #00ccff;
+      outline-offset: -1px;
+    }
+    .entity-marker {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      pointer-events: none;
+    }
+    .entity-marker.spawn { color: #7CFC9A; }
+    .entity-marker.goal { color: #ffcc33; }
+    .entity-marker.moving { color: #00ccff; }
+
+    #json-preview {
+      width: 100%;
+      max-width: 640px;
+      height: 220px;
+    }
+
+    #section-list {
+      list-style: none;
+      margin: 0 0 10px;
+      padding: 0;
+    }
+    #section-list li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #12121a;
+      border: 1px solid #3a3a4a;
+      border-radius: 6px;
+      padding: 4px 6px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    #section-list li span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #section-list button {
+      padding: 2px 6px;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #777;
+      line-height: 1.5;
+      margin: 4px 0 0;
+    }
+
+    .file-btn {
+      display: inline-block;
+    }
+    .file-btn input[type="file"] {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h1>Level Editor</h1>
+
+    <h2>Section</h2>
+    <div class="row">
+      <div>
+        <label for="section-id">Section id</label>
+        <input type="text" id="section-id" value="new-section" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="section-cols">Cols</label>
+        <input type="number" id="section-cols" min="4" max="60" value="20" />
+      </div>
+      <div>
+        <label for="section-rows">Rows</label>
+        <input type="number" id="section-rows" min="4" max="30" value="12" />
+      </div>
+    </div>
+    <div class="row">
+      <button id="resize-btn">Resize / clear</button>
+      <button id="new-btn">New blank</button>
+    </div>
+
+    <h2>Palette</h2>
+    <div class="tool-grid">
+      <button class="tool-btn active" data-tool="G"><span class="swatch" style="background:#4a4a5e"></span>Ground</button>
+      <button class="tool-btn" data-tool="H"><span class="swatch" style="background:#d1495b"></span>Hazard</button>
+      <button class="tool-btn" data-tool="."><span class="swatch" style="background:#1d1d2b;border:1px solid #444"></span>Eraser</button>
+      <button class="tool-btn" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
+      <button class="tool-btn" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span>Goal</button>
+      <button class="tool-btn" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span>Moving plat.</button>
+    </div>
+    <p class="hint">
+      Drag to paint Ground/Hazard/Eraser. Click to place Spawn/Goal (only one each —
+      placing a new one moves the old). Click an empty cell with Moving Platform to add
+      one (prompts for axis/range/speed); click an existing marker to remove it. The
+      highlighted bottom row is the ground baseline every section anchors to.
+    </p>
+
+    <h2>Section JSON</h2>
+    <div class="row">
+      <button id="export-section-btn" class="primary">Download section JSON</button>
+    </div>
+    <div class="row">
+      <label class="file-btn">
+        <button type="button" id="import-section-label-btn">Load section JSON…</button>
+        <input type="file" id="import-section-file" accept="application/json" />
+      </label>
+    </div>
+
+    <h2>Level sequence</h2>
+    <div class="row">
+      <div>
+        <label for="level-id">Level id</label>
+        <input type="text" id="level-id" value="level1" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="level-parallax">Parallax set</label>
+        <input type="text" id="level-parallax" value="level1" />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="add-section-input">Add current section to sequence</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="add-section-input" placeholder="section id" />
+          <button id="add-section-btn">Add</button>
+        </div>
+      </div>
+    </div>
+    <ul id="section-list"></ul>
+    <div class="row">
+      <button id="export-level-btn" class="primary">Download levels.json</button>
+    </div>
+    <p class="hint">
+      Drop the section files into assets/levels/sections/ and the levels.json entry into
+      assets/levels/levels.json (merge with any existing levels) to play it in-game.
+    </p>
+  </div>
+
+  <div id="main">
+    <div id="grid-wrap">
+      <div id="grid"></div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">Live JSON preview</h2>
+      <textarea id="json-preview" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:8px;">
+        <button id="apply-json-btn">Apply edited JSON above</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/editor/main.js"></script>
+</body>
+</html>
