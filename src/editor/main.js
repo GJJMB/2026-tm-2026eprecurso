@@ -2,8 +2,10 @@ import {
   CELL,
   CELL_SIZE,
   DEFAULT_COLS,
+  DEFAULT_ENEMY_RANGE_COLS,
   DEFAULT_ROWS,
   ENTITY_TYPES,
+  PATROLLING_ENEMY_TYPES,
   emptyGrid,
   groundRow,
   isValidSection,
@@ -44,12 +46,30 @@ const ENTITY_LABELS = {
   [ENTITY_TYPES.PLAYER_SPAWN]: 'Player Spawn',
   [ENTITY_TYPES.GOAL]: 'Goal',
   [ENTITY_TYPES.MOVING_PLATFORM]: 'Moving Platform',
+  [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: 'False Friend',
+  [ENTITY_TYPES.ENEMY_CRAWLER]: 'Crawler',
+  [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: 'Vomit Seagull',
 };
 
 const ENTITY_COLORS = {
   [ENTITY_TYPES.PLAYER_SPAWN]: '#7CFC9A',
   [ENTITY_TYPES.GOAL]: '#ffcc33',
   [ENTITY_TYPES.MOVING_PLATFORM]: '#00ccff',
+  [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: '#ff8800',
+  [ENTITY_TYPES.ENEMY_CRAWLER]: '#44aa44',
+  [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: '#ffcc00',
+};
+
+const ENEMY_MARKER_TEXT = {
+  [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: 'FF',
+  [ENTITY_TYPES.ENEMY_CRAWLER]: 'CR',
+  [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: 'VS',
+};
+
+const ENEMY_MARKER_CLASS = {
+  [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: 'enemy-falsefriend',
+  [ENTITY_TYPES.ENEMY_CRAWLER]: 'enemy-crawler',
+  [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: 'enemy-vomitseagull',
 };
 
 const DEFAULT_SEGMENT_SPEED = 70;
@@ -70,6 +90,12 @@ function makeMovingPlatformEntity(row, col) {
     ],
     speeds: [DEFAULT_SEGMENT_SPEED],
   };
+}
+
+function makeEnemyEntity(type, row, col) {
+  const entity = { type, col, row };
+  if (PATROLLING_ENEMY_TYPES.includes(type)) entity.rangeCols = DEFAULT_ENEMY_RANGE_COLS;
+  return entity;
 }
 
 function makeBlankState(id, cols, rows) {
@@ -171,6 +197,9 @@ function renderMarkersAndHighlight() {
     } else if (entity.type === ENTITY_TYPES.GOAL) {
       marker.className = 'entity-marker goal';
       marker.textContent = 'F';
+    } else if (ENEMY_MARKER_CLASS[entity.type]) {
+      marker.className = `entity-marker ${ENEMY_MARKER_CLASS[entity.type]}`;
+      marker.textContent = ENEMY_MARKER_TEXT[entity.type];
     }
     cell.appendChild(marker);
     if (isSelected) outline(cell, '#fff');
@@ -478,6 +507,12 @@ function renderInspector() {
       }
     } else {
       addReadonlyField(els.inspectorFields, 'Position', `col ${entity.col}, row ${entity.row}`);
+      if (PATROLLING_ENEMY_TYPES.includes(entity.type)) {
+        addNumberField(els.inspectorFields, 'Patrol range (cells each way)', entity.rangeCols, (v) => {
+          entity.rangeCols = v;
+          syncPreview();
+        });
+      }
     }
   } else {
     els.inspectorTitle.textContent = selection.type === CELL.HAZARD ? 'Hazard' : 'Ground / Platform';
@@ -630,12 +665,20 @@ document.addEventListener('mouseup', () => {
   isPainting = false;
 });
 
+const ENEMY_TOOL_TYPES = [
+  ENTITY_TYPES.ENEMY_FALSE_FRIEND,
+  ENTITY_TYPES.ENEMY_CRAWLER,
+  ENTITY_TYPES.ENEMY_VOMIT_SEAGULL,
+];
+
 function placeEntity(row, col) {
   if (currentTool === ENTITY_TYPES.PLAYER_SPAWN || currentTool === ENTITY_TYPES.GOAL) {
     state.entities = state.entities.filter((e) => e.type !== currentTool);
     state.entities.push({ type: currentTool, col, row });
   } else if (currentTool === ENTITY_TYPES.MOVING_PLATFORM) {
     state.entities.push(makeMovingPlatformEntity(row, col));
+  } else if (ENEMY_TOOL_TYPES.includes(currentTool)) {
+    state.entities.push(makeEnemyEntity(currentTool, row, col));
   } else {
     return;
   }

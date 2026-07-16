@@ -1,4 +1,6 @@
-export default class Crawler extends Phaser.GameObjects.Container {
+import Actor from './Actor.js';
+
+export default class Crawler extends Actor {
   /**
    * @param {Phaser.Scene} scene
    * @param {number} x - spawn x
@@ -8,8 +10,6 @@ export default class Crawler extends Phaser.GameObjects.Container {
    */
   constructor(scene, x, y, leftBound, rightBound) {
     super(scene, x, y);
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
 
     this.body.setSize(20, 20);
     this.body.setOffset(-10, -10);
@@ -25,9 +25,6 @@ export default class Crawler extends Phaser.GameObjects.Container {
     this.leftBound = leftBound || x - 150;
     this.rightBound = rightBound || x + 150;
 
-    // Simple graphics: a dark circle with eyes
-    this.gfx = scene.add.graphics();
-    this.add(this.gfx);
     this.draw();
   }
 

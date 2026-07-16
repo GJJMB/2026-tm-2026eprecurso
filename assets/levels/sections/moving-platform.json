@@ -25,6 +25,12 @@
         { "col": 9, "row": 4 }
       ],
       "speeds": [70]
+    },
+    {
+      "type": "enemyCrawler",
+      "col": 3,
+      "row": 10,
+      "rangeCols": 3
     }
   ]
 }

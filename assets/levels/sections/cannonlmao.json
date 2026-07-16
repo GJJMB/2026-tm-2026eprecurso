@@ -1,5 +1,5 @@
 {
-  "id": "finale",
+  "id": "cannonlmao",
   "cols": 20,
   "rows": 12,
   "grid": [
@@ -11,22 +11,28 @@
     "....................",
     "....................",
     "....................",
+    "GGGG................",
     "....................",
     "....................",
-    "....................",
-    "GGGGGGGGGGGGGGGGGGGG"
+    "GGGGGGGGG..........."
   ],
   "entities": [
     {
-      "type": "goal",
-      "col": 17,
-      "row": 11
-    },
-    {
-      "type": "enemyVomitSeagull",
-      "col": 10,
-      "row": 4,
-      "rangeCols": 6
+      "type": "movingPlatform",
+      "widthCells": 3,
+      "waypoints": [
+        {
+          "col": 0,
+          "row": 10
+        },
+        {
+          "col": 20,
+          "row": 10
+        }
+      ],
+      "speeds": [
+        2000
+      ]
     }
   ]
 }

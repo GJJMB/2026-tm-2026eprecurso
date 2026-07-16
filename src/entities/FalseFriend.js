@@ -1,22 +1,19 @@
 // A goomba-like enemy that studies the player's moves, prioritizes survival, then killing.
 // States: STUDY, CHASE, FLEE, RANDOM.
 
+import Actor from './Actor.js';
+
 const STUDY_DURATION = 4000; // ms
 
-export default class FalseFriend extends Phaser.GameObjects.Container {
+export default class FalseFriend extends Actor {
   constructor(scene, x, y) {
     super(scene, x, y);
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
 
     this.body.setSize(20, 40);
     this.body.setOffset(-10, -40);
     this.body.setCollideWorldBounds(true);
     this.body.setMaxVelocity(200, 600);
     this.body.setDragX(400);
-
-    this.gfx = scene.add.graphics();
-    this.add(this.gfx);
 
     // Health
     this.health = 1;

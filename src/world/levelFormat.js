@@ -3,8 +3,8 @@
  * standalone editor (src/editor/) so the two never drift apart on cell semantics.
  *
  * A "section" is a fixed-size grid of single-character cells (rows top-to-bottom,
- * cols left-to-right) plus a list of point "entities" (spawn, goal, moving platforms)
- * that need richer parameters than a single character can hold. The grid's last row
+ * cols left-to-right) plus a list of point "entities" (spawn, goal, moving platforms,
+ * enemies) that need richer parameters than a single character can hold. The grid's last row
  * is always the ground baseline — every section anchors to it, which is what lets
  * sections be strung together left-to-right and still line up vertically.
  */
@@ -23,7 +23,15 @@ export const ENTITY_TYPES = {
   PLAYER_SPAWN: 'playerSpawn',
   GOAL: 'goal',
   MOVING_PLATFORM: 'movingPlatform',
+  ENEMY_FALSE_FRIEND: 'enemyFalseFriend',
+  ENEMY_CRAWLER: 'enemyCrawler',
+  ENEMY_VOMIT_SEAGULL: 'enemyVomitSeagull',
 };
+
+/** Enemy entity types that patrol a bounded range around their spawn point (col ± rangeCols). */
+export const PATROLLING_ENEMY_TYPES = [ENTITY_TYPES.ENEMY_CRAWLER, ENTITY_TYPES.ENEMY_VOMIT_SEAGULL];
+
+export const DEFAULT_ENEMY_RANGE_COLS = 4;
 
 export function groundRow(rows) {
   return rows - 1;

@@ -1,9 +1,11 @@
 import Stickman from '../entities/Stickman.js';
 import FalseFriend from '../entities/FalseFriend.js';
+import Crawler from '../entities/Crawler.js';
+import VomitSeagull from '../entities/VomitSeagull.js';
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
 import LevelLoader from '../world/LevelLoader.js';
-import { CELL, ENTITY_TYPES } from '../world/levelFormat.js';
+import { CELL, ENTITY_TYPES, DEFAULT_ENEMY_RANGE_COLS } from '../world/levelFormat.js';
 import { t } from '../i18n.js';
 import { showPauseMenu, hidePauseMenu } from '../ui/DomMenus.js';
 
@@ -49,6 +51,7 @@ export default class GameScene extends Phaser.Scene {
     this.platforms = [];
     this.movingPlatforms = [];
     this.hazards = [];
+    this.enemies = [];
     this.finished = false;
     this.paused = false;
     this.elapsedMs = 0;
@@ -67,6 +70,10 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
+    // Enemies to spawn once the player/platforms exist below, so their colliders/overlaps
+    // can be wired up immediately instead of patched in afterwards.
+    const enemySpawns = [];
+
     for (const entity of plan.entities) {
       if (entity.type === ENTITY_TYPES.PLAYER_SPAWN) {
         spawn = { x: entity.x, y: entity.y };
@@ -75,6 +82,12 @@ export default class GameScene extends Phaser.Scene {
       } else if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
         const w = (entity.widthCells || DEFAULT_MOVING_PLATFORM_WIDTH_CELLS) * plan.cellSize;
         this._addMovingPlatform(entity.waypoints, w, plan.cellSize, MOVING_PLATFORM_COLOR, entity.speeds);
+      } else if (
+        entity.type === ENTITY_TYPES.ENEMY_FALSE_FRIEND ||
+        entity.type === ENTITY_TYPES.ENEMY_CRAWLER ||
+        entity.type === ENTITY_TYPES.ENEMY_VOMIT_SEAGULL
+      ) {
+        enemySpawns.push(entity);
       }
     }
 
@@ -88,16 +101,10 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.hazards, () => this._finish(false), undefined, this);
     this.physics.add.overlap(this.player, this.goal, () => this._finish(true), undefined, this);
 
-    // ---- FalseFriend – random spawn, away from the player's actual spawn point ----
-    let spawnX;
-    const minSpawn = 200, maxSpawn = levelWidth - 200;
-    do {
-      spawnX = minSpawn + Math.random() * (maxSpawn - minSpawn);
-    } while (Math.abs(spawnX - spawn.x) < 150);
-    this.falseFriend = new FalseFriend(this, spawnX, groundY - 40);
-    this.physics.add.collider(this.falseFriend, this.platforms);
-    this.physics.add.collider(this.player, this.falseFriend);
-    this.physics.add.overlap(this.player, this.falseFriend, this._handlePlayerEnemyCollision, undefined, this);
+    // ---- Enemies – placed by the level itself (see levelFormat.js's ENTITY_TYPES) ----
+    for (const entity of enemySpawns) {
+      this._addEnemy(entity, plan.cellSize);
+    }
 
     // ---- Camera & controls ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
@@ -125,11 +132,39 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(10);
   }
 
+  /**
+   * Builds the enemy named by `entity.type` (see levelFormat.js's ENTITY_TYPES) at its
+   * placed position, and wires up the same platform/player collisions every enemy needs.
+   * Crawler/VomitSeagull patrol a bounded range around their spawn point, sized in cells
+   * via the entity's optional `rangeCols` (falls back to DEFAULT_ENEMY_RANGE_COLS).
+   */
+  _addEnemy(entity, cellSize) {
+    const rangePx = (entity.rangeCols || DEFAULT_ENEMY_RANGE_COLS) * cellSize;
+    let enemy;
+    if (entity.type === ENTITY_TYPES.ENEMY_FALSE_FRIEND) {
+      enemy = new FalseFriend(this, entity.x, entity.y);
+    } else if (entity.type === ENTITY_TYPES.ENEMY_CRAWLER) {
+      enemy = new Crawler(this, entity.x, entity.y, entity.x - rangePx, entity.x + rangePx);
+    } else if (entity.type === ENTITY_TYPES.ENEMY_VOMIT_SEAGULL) {
+      enemy = new VomitSeagull(this, entity.x, entity.y, entity.x - rangePx, entity.x + rangePx);
+    } else {
+      return;
+    }
+
+    this.physics.add.collider(enemy, this.platforms);
+    this.physics.add.collider(this.player, enemy);
+    this.physics.add.overlap(this.player, enemy, this._handlePlayerEnemyCollision, undefined, this);
+    this.enemies.push(enemy);
+  }
+
   _handlePlayerEnemyCollision(player, enemy) {
-    if (!enemy.alive) return;
+    if (enemy.alive === false) return;
+    // Only enemies that implement takeDamage/die (currently FalseFriend) can be stomped —
+    // anything else is simply lethal to touch, from any side.
+    const stompable = typeof enemy.takeDamage === 'function';
     const playerBottom = player.y;
     const enemyTop = enemy.y - 40;
-    if (player.body.velocity.y > 0 && playerBottom < enemyTop + 10) {
+    if (stompable && player.body.velocity.y > 0 && playerBottom < enemyTop + 10) {
       // Stomp → kill enemy
       enemy.takeDamage();
       player.body.setVelocityY(-300);
@@ -275,9 +310,9 @@ export default class GameScene extends Phaser.Scene {
     if (jump && this.player.jump()) this.sfx.play('jump');
     this.player.update(time, delta);
 
-    // enemy
-    if (this.falseFriend.alive) {
-      this.falseFriend.update(time, delta, this.player);
+    // enemies
+    for (const enemy of this.enemies) {
+      if (enemy.alive !== false) enemy.update(time, delta, this.player);
     }
 
     // death

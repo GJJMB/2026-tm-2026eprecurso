@@ -1,6 +1,8 @@
 // Seagull-like bird that flies back and forth, vomits sticky fire blobs.
 
-export default class VomitSeagull extends Phaser.GameObjects.Container {
+import Actor from './Actor.js';
+
+export default class VomitSeagull extends Actor {
   /**
    * @param {Phaser.Scene} scene
    * @param {number} x - spawn x (center)
@@ -10,8 +12,6 @@ export default class VomitSeagull extends Phaser.GameObjects.Container {
    */
   constructor(scene, x, y, minX, maxX) {
     super(scene, x, y);
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
 
     this.body.setAllowGravity(false);
     this.body.setSize(30, 20);
@@ -34,10 +34,6 @@ export default class VomitSeagull extends Phaser.GameObjects.Container {
     // Vomit
     this.vomitCooldown = 0;
     this.vomitInterval = 2000 + Math.random() * 3000; // 2-5 seconds
-
-    // Graphics
-    this.gfx = scene.add.graphics();
-    this.add(this.gfx);
 
     // Wing flap animation
     this.wingAngle = 0;

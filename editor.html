@@ -205,6 +205,9 @@
     .entity-marker.spawn { color: #7CFC9A; }
     .entity-marker.goal { color: #ffcc33; }
     .entity-marker.moving { color: #00ccff; }
+    .entity-marker.enemy-falsefriend { color: #ff8800; font-size: 10px; }
+    .entity-marker.enemy-crawler { color: #44aa44; font-size: 10px; }
+    .entity-marker.enemy-vomitseagull { color: #ffcc00; font-size: 10px; }
 
     #json-preview {
       width: 100%;
@@ -258,11 +261,12 @@
 
     .entity-tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
       margin-bottom: 8px;
     }
     .entity-tabs .tool-btn {
-      flex: 1;
+      flex: 1 1 30%;
       flex-direction: column;
       align-items: center;
       gap: 4px;
@@ -461,12 +465,15 @@
       <button class="tool-btn entity-tab" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
       <button class="tool-btn entity-tab" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span>Goal</button>
       <button class="tool-btn entity-tab" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span>Moving</button>
+      <button class="tool-btn entity-tab" data-tool="enemyFalseFriend"><span class="swatch" style="background:#ff8800"></span>False Friend</button>
+      <button class="tool-btn entity-tab" data-tool="enemyCrawler"><span class="swatch" style="background:#44aa44"></span>Crawler</button>
+      <button class="tool-btn entity-tab" data-tool="enemyVomitSeagull"><span class="swatch" style="background:#ffcc00"></span>Seagull</button>
     </div>
     <p class="hint">
       Click an empty cell to place the selected entity (Spawn/Goal are singletons —
-      placing a new one moves the old). Already-placed entities and platform tiles are
-      listed in the right sidebar — select one there (or click its marker/tile here) to
-      edit its properties.
+      placing a new one moves the old; Moving/enemies allow any number). Already-placed
+      entities and platform tiles are listed in the right sidebar — select one there (or
+      click its marker/tile here) to edit its properties.
     </p>
 
     <h2>Section JSON</h2>
