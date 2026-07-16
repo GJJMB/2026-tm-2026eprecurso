@@ -1,0 +1,13 @@
+{
+  "name": "stickman-runner",
+  "version": "1.0.0",
+  "description": "2D stickman runner/platformer built with Phaser 3 for Tecnologias Multimedia TP2 (epoca de recurso)",
+  "private": true,
+  "scripts": {
+    "start": "serve -l 5500 ."
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "serve": "^14.2.6"
+  }
+}
