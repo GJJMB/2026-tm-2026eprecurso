@@ -1,6 +1,7 @@
 import Stickman from '../entities/Stickman.js';
 import SoundManager from '../audio/SoundManager.js';
 import { t } from '../i18n.js';
+import { showPauseMenu, hidePauseMenu } from '../ui/DomMenus.js';
 
 const GROUND_COLOR = 0x3a3a4a;
 const PLATFORM_COLOR = 0x4a4a5e;
@@ -34,6 +35,7 @@ export default class GameScene extends Phaser.Scene {
     this.movingPlatforms = [];
     this.hazards = [];
     this.finished = false;
+    this.paused = false;
     this.elapsedMs = 0;
     this.deathY = height + 150;
 
@@ -67,6 +69,8 @@ export default class GameScene extends Phaser.Scene {
 
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('A,D,SPACE');
+    this.input.keyboard.on('keydown-ESC', () => this._togglePause());
+    this.events.once('shutdown', hidePauseMenu);
 
     this.add
       .text(width / 2, 16, t('game.instructions'), {
@@ -130,6 +134,33 @@ export default class GameScene extends Phaser.Scene {
     return container;
   }
 
+  _togglePause() {
+    if (this.finished) return;
+    if (this.paused) this._resume();
+    else this._pause();
+  }
+
+  _pause() {
+    // Freeze physics instead of this.scene.pause(): a full scene pause also
+    // suspends this scene's own Input Plugin, which would stop the keydown-ESC
+    // listener below from ever firing again to close the menu.
+    this.paused = true;
+    this.physics.pause();
+    showPauseMenu({
+      onResume: () => this._resume(),
+      onRestart: () => this.scene.start('GameScene'),
+      onLeave: () => this.scene.start('MenuScene'),
+    });
+  }
+
+  _resume() {
+    this.paused = false;
+    this.physics.resume();
+    hidePauseMenu();
+    // Drop any key state latched while paused so it can't fire an action (e.g. a jump) on resume.
+    this.input.keyboard.resetKeys();
+  }
+
   _finish(won) {
     if (this.finished) return;
     this.finished = true;
@@ -139,7 +170,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    if (this.finished) return;
+    if (this.finished || this.paused) return;
 
     for (const platform of this.movingPlatforms) {
       const { axis, origin, range, speed } = platform._patrol;

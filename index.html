@@ -20,10 +20,139 @@
     #game-container canvas {
       display: block;
     }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    .overlay.hidden {
+      display: none;
+    }
+    #main-menu {
+      background: #111;
+    }
+    #pause-menu {
+      background: rgba(0, 0, 0, 0.6);
+    }
+
+    .panel {
+      position: relative;
+      min-width: 280px;
+      padding: 32px 40px;
+      text-align: center;
+      color: #fff;
+      background: #1d1d2b;
+      border: 1px solid #3a3a4a;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    }
+    .btn-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 28px;
+      height: 28px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: #888;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .btn-close:hover {
+      background: #2c2c3a;
+      color: #fff;
+    }
+    .panel h1 {
+      margin: 0 0 24px;
+      font-size: 32px;
+    }
+    .panel h2 {
+      margin: 0 0 20px;
+      font-size: 24px;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      margin: 8px 0;
+      padding: 12px 20px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background: #2c2c3a;
+      color: #ddd;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .btn:hover {
+      background: #3a3a4e;
+    }
+    .btn.primary {
+      background: #4a6cf7;
+      color: #fff;
+    }
+    .btn.primary:hover {
+      background: #5c7bff;
+    }
+
+    .lang-row {
+      margin-top: 20px;
+    }
+    .lang-row span {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #888;
+    }
+    .lang-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+    }
+    .lang-btn {
+      padding: 6px 14px;
+      font-size: 13px;
+      border: none;
+      border-radius: 6px;
+      background: #242430;
+      color: #777;
+      cursor: pointer;
+    }
+    .lang-btn.active {
+      color: #fff;
+      background: #333344;
+    }
   </style>
 </head>
 <body>
   <div id="game-container"></div>
+
+  <div id="main-menu" class="overlay hidden">
+    <div class="panel">
+      <h1 id="mm-title"></h1>
+      <button id="mm-start" class="btn primary"></button>
+      <div class="lang-row">
+        <span id="mm-lang-label"></span>
+        <div id="mm-lang-buttons" class="lang-buttons"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="pause-menu" class="overlay hidden">
+    <div class="panel">
+      <button id="pm-close" class="btn-close" aria-label="Resume">&times;</button>
+      <h2 id="pm-title"></h2>
+      <button id="pm-restart" class="btn primary"></button>
+      <button id="pm-leave" class="btn"></button>
+    </div>
+  </div>
 
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script type="module" src="src/main.js"></script>
