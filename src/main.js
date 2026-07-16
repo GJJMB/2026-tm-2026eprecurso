@@ -7,9 +7,13 @@ import GameOverScene from './scenes/GameOverScene.js';
 const config = {
   type: Phaser.AUTO,
   parent: 'game-container',
-  width: 960,
-  height: 540,
+  width: window.innerWidth,
+  height: window.innerHeight,
   backgroundColor: '#1d1d2b',
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.CENTER_BOTH,
+  },
   physics: {
     default: 'arcade',
     arcade: {
@@ -20,4 +24,8 @@ const config = {
   scene: [BootScene, PreloadScene, MenuScene, GameScene, GameOverScene],
 };
 
-new Phaser.Game(config);
+const game = new Phaser.Game(config);
+
+window.addEventListener('resize', () => {
+  game.scale.resize(window.innerWidth, window.innerHeight);
+});
