@@ -1,4 +1,6 @@
 import Stickman from '../entities/Stickman.js';
+import SoundManager from '../audio/SoundManager.js';
+import { t } from '../i18n.js';
 
 const GROUND_COLOR = 0x3a3a4a;
 const PLATFORM_COLOR = 0x4a4a5e;
@@ -53,6 +55,8 @@ export default class GameScene extends Phaser.Scene {
 
     this._addGoal(levelWidth - 80, groundTopY);
 
+    this.sfx = new SoundManager(this);
+
     this.player = new Stickman(this, 80, groundY - 80);
     this.physics.add.collider(this.player, this.platforms);
     this.physics.add.overlap(this.player, this.hazards, () => this._finish(false), undefined, this);
@@ -65,7 +69,7 @@ export default class GameScene extends Phaser.Scene {
     this.keys = this.input.keyboard.addKeys('A,D,SPACE');
 
     this.add
-      .text(width / 2, 16, 'Arrows / A-D to move, Up or Space to jump', {
+      .text(width / 2, 16, t('game.instructions'), {
         fontSize: '14px',
         color: '#888888',
       })
@@ -73,9 +77,9 @@ export default class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(10);
 
-    // TODO (Phase 3): pull HUD/instruction strings from i18n instead of hardcoding.
+    this.hudLabel = t('game.time');
     this.hudText = this.add
-      .text(16, 16, 'Time: 0.0s', { fontSize: '16px', color: '#ffffff' })
+      .text(16, 16, `${this.hudLabel}: 0.0s`, { fontSize: '16px', color: '#ffffff' })
       .setScrollFactor(0)
       .setDepth(10);
   }
@@ -130,6 +134,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.player.setMove(0);
+    this.sfx.play(won ? 'win' : 'lose');
     this.scene.start('GameOverScene', { won });
   }
 
@@ -153,7 +158,7 @@ export default class GameScene extends Phaser.Scene {
     else if (right && !left) dir = 1;
 
     this.player.setMove(dir);
-    if (jumpPressed) this.player.jump();
+    if (jumpPressed && this.player.jump()) this.sfx.play('jump');
     this.player.update(time, delta);
 
     if (this.player.y > this.deathY) {
@@ -162,6 +167,6 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.elapsedMs += delta;
-    this.hudText.setText(`Time: ${(this.elapsedMs / 1000).toFixed(1)}s`);
+    this.hudText.setText(`${this.hudLabel}: ${(this.elapsedMs / 1000).toFixed(1)}s`);
   }
 }

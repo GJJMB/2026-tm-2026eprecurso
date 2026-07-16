@@ -1,3 +1,6 @@
+import SoundManager from '../audio/SoundManager.js';
+import { queueLocaleLoads, initLocales } from '../i18n.js';
+
 export default class PreloadScene extends Phaser.Scene {
   constructor() {
     super('PreloadScene');
@@ -12,10 +15,15 @@ export default class PreloadScene extends Phaser.Scene {
 
     this.load.on('complete', () => loadingText.destroy());
 
-    // TODO (Phase 1+): load stickman spritesheet, platform tiles, goal flag, audio.
+    // The player has no texture-based sprite (see Stickman.js), so there's nothing to
+    // queue here for it. Sound files are queued from the manifest BootScene already
+    // fetched; locale JSON is queued alongside it.
+    SoundManager.queueSoundLoads(this);
+    queueLocaleLoads(this);
   }
 
   create() {
+    initLocales(this);
     this.scene.start('MenuScene');
   }
 }

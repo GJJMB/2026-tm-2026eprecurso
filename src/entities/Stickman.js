@@ -84,10 +84,13 @@ export default class Stickman extends Phaser.GameObjects.Container {
     }
   }
 
+  /** Returns true if a jump was actually triggered (i.e. was grounded), false otherwise. */
   jump() {
     if (this.grounded) {
       this.body.setVelocityY(JUMP_VELOCITY);
+      return true;
     }
+    return false;
   }
 
   update(time, delta) {

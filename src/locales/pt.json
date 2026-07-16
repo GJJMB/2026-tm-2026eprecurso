@@ -1,0 +1,10 @@
+{
+  "menu.title": "Stickman Runner",
+  "menu.start": "Prima ESPAÇO para começar",
+  "menu.language": "Idioma",
+  "game.instructions": "Setas / A-D para mover, Cima ou Espaço para saltar",
+  "game.time": "Tempo",
+  "gameover.win": "Ganhaste!",
+  "gameover.lose": "Fim de Jogo",
+  "gameover.restart": "Prima R para reiniciar"
+}
