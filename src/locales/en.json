@@ -1,9 +1,12 @@
 {
   "menu.title": "Stickman Runner",
-  "menu.start": "Press SPACE to start",
+  "menu.start": "Start",
   "menu.language": "Language",
   "game.instructions": "Arrows / A-D to move, Up or Space to jump",
   "game.time": "Time",
+  "pause.title": "Paused",
+  "pause.restart": "Restart",
+  "pause.leave": "Leave",
   "gameover.win": "You Win!",
   "gameover.lose": "Game Over",
   "gameover.restart": "Press R to restart"
