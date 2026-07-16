@@ -24,9 +24,13 @@ const MAX_SPEED_Y = 900;
 const DRAG_X = 1400;
 const JUMP_VELOCITY = -480;
 
-// --- Impact / landing reaction (only squash, no leg modification) ---
-const HIT_DURATION = 0.2;           // seconds
-const SQUASH_FACTOR = 0.2;          // vertical scale reduction
+// --- Inertia / lean ---
+const MAX_LEAN_ANGLE = Phaser.Math.DegToRad(15);  // max tilt (radians)
+const LEAN_SMOOTHNESS = 6.0;                      // per second
+
+// --- Impact / landing squash ---
+const HIT_DURATION = 0.2;
+const SQUASH_FACTOR = 0.2;
 
 export default class Stickman extends Phaser.GameObjects.Container {
   constructor(scene, x, y) {
@@ -48,9 +52,12 @@ export default class Stickman extends Phaser.GameObjects.Container {
     this.idlePhase = 0;
     this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0 };
 
+    // --- Lean (inertia) ---
+    this.lean = 0;
+
     // --- Hit reaction ---
-    this.hitTime = 0;                // remaining hit duration
-    this.wasGrounded = false;        // track landing
+    this.hitTime = 0;
+    this.wasGrounded = false;
 
     this.draw();
   }
@@ -82,7 +89,6 @@ export default class Stickman extends Phaser.GameObjects.Container {
     // --- Detect landing ---
     const isGrounded = this.grounded;
     if (isGrounded && !this.wasGrounded) {
-      // Landed: trigger hit reaction
       this.hitTime = HIT_DURATION;
     }
     this.wasGrounded = isGrounded;
@@ -93,7 +99,12 @@ export default class Stickman extends Phaser.GameObjects.Container {
       if (this.hitTime < 0) this.hitTime = 0;
     }
 
-    // --- Pose update (original symmetric leg movement) ---
+    // --- Compute target lean based on velocity (inertia) ---
+    const targetLean = Phaser.Math.Clamp(speed / MAX_SPEED_X, -1, 1) * MAX_LEAN_ANGLE;
+    // Smoothly interpolate lean
+    this.lean += (targetLean - this.lean) * (1 - Math.exp(-LEAN_SMOOTHNESS * dt));
+
+    // --- Update pose ---
     if (!this.grounded) {
       this._updateAirbornePose();
     } else if (absSpeed > 8) {
@@ -122,7 +133,6 @@ export default class Stickman extends Phaser.GameObjects.Container {
     const cycleRate = 2 + (absSpeed / GAIT_SPEED_FOR_FULL_CYCLE) * 6;
     this.gaitPhase += dt * cycleRate;
 
-    // --- Original symmetric swing (no random offsets) ---
     const swing = Math.sin(this.gaitPhase);
     this.pose.leftLeg = swing * MAX_LEG_SWING;
     this.pose.rightLeg = -swing * MAX_LEG_SWING;
@@ -147,22 +157,24 @@ export default class Stickman extends Phaser.GameObjects.Container {
     const g = this.gfx;
     g.clear();
 
-    // --- Compute hit intensity (0..1) ---
+    // --- Hit intensity for squash ---
     let hitIntensity = 0;
     if (this.hitTime > 0) {
-      hitIntensity = this.hitTime / HIT_DURATION;  // 1 at impact, 0 when done
+      hitIntensity = this.hitTime / HIT_DURATION;
     }
-
-    // --- Apply squash (vertical scale reduction) only ---
     const squash = 1 - hitIntensity * SQUASH_FACTOR;
-    this.setScale(this.facing, squash);
 
+    // --- Apply transform: scale (facing + squash) and rotation (lean) ---
+    this.setScale(this.facing, squash);
+    this.setRotation(this.lean);
+
+    // --- Pose offsets (scaled vertically by squash) ---
     const bob = this.pose.bob || 0;
     const headY = (HEAD_Y + bob) * squash;
     const shoulderY = (SHOULDER_Y + bob) * squash;
     const hipY = (HIP_Y + bob * 0.5) * squash;
 
-    // --- Glow passes (broad) ---
+    // --- Glow layers (same as before) ---
     g.lineStyle(GLOW_WIDTH, GLOW_COLOR, 0.15);
     this._drawLimb(0, hipY, this.pose.leftLeg, LEG_LENGTH);
     this._drawLimb(0, hipY, this.pose.rightLeg, LEG_LENGTH);
@@ -172,7 +184,6 @@ export default class Stickman extends Phaser.GameObjects.Container {
     g.fillStyle(GLOW_COLOR, 0.15);
     g.fillCircle(0, headY - HEAD_RADIUS, HEAD_RADIUS + 4);
 
-    // --- Glow passes (tighter) ---
     g.lineStyle(5, GLOW_COLOR, 0.25);
     this._drawLimb(0, hipY, this.pose.leftLeg, LEG_LENGTH);
     this._drawLimb(0, hipY, this.pose.rightLeg, LEG_LENGTH);
@@ -182,7 +193,7 @@ export default class Stickman extends Phaser.GameObjects.Container {
     g.fillStyle(GLOW_COLOR, 0.25);
     g.fillCircle(0, headY - HEAD_RADIUS, HEAD_RADIUS + 2);
 
-    // --- Main dark limbs (original symmetry) ---
+    // --- Main dark limbs ---
     g.lineStyle(LIMB_WIDTH, LIMB_COLOR, 1);
     this._drawLimb(0, hipY, this.pose.leftLeg, LEG_LENGTH);
     this._drawLimb(0, hipY, this.pose.rightLeg, LEG_LENGTH);
