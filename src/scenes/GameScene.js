@@ -1,5 +1,15 @@
 import Stickman from '../entities/Stickman.js';
 
+const GROUND_COLOR = 0x3a3a4a;
+const PLATFORM_COLOR = 0x4a4a5e;
+const MOVING_PLATFORM_COLOR = 0x4f7a5c;
+const HAZARD_COLOR = 0xd1495b;
+const GOAL_POLE_COLOR = 0xd8d8d8;
+const GOAL_FLAG_COLOR = 0xffcc33;
+
+const PIT_START = 900;
+const PIT_WIDTH = 150;
+
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super('GameScene');
@@ -8,22 +18,45 @@ export default class GameScene extends Phaser.Scene {
   create() {
     const width = this.scale.width;
     const height = this.scale.height;
-    const levelWidth = Math.max(width * 3, 2400);
+    const levelWidth = Math.max(width * 4, 3000);
+    const groundY = height - 24;
+    const groundTopY = groundY - 24;
 
-    this.physics.world.setBounds(0, 0, levelWidth, height);
+    // Extra headroom below the visible ground so falling into the pit is a real
+    // fall (camera just won't follow that far down) rather than an instant stop
+    // against the world bounds.
+    this.physics.world.setBounds(0, 0, levelWidth, height + 400);
     this.cameras.main.setBounds(0, 0, levelWidth, height);
 
     this.platforms = [];
+    this.movingPlatforms = [];
+    this.hazards = [];
+    this.finished = false;
+    this.elapsedMs = 0;
+    this.deathY = height + 150;
 
-    const groundY = height - 24;
-    this._addPlatform(levelWidth / 2, groundY, levelWidth, 48, 0x3a3a4a);
-    this._addPlatform(420, groundY - 120, 160, 24, 0x4a4a5e);
-    this._addPlatform(720, groundY - 200, 160, 24, 0x4a4a5e);
-    this._addPlatform(1040, groundY - 120, 160, 24, 0x4a4a5e);
-    this._addPlatform(1400, groundY - 240, 200, 24, 0x4a4a5e);
+    const pitEnd = PIT_START + PIT_WIDTH;
+    this._addPlatform(PIT_START / 2, groundY, PIT_START, 48, GROUND_COLOR);
+    this._addPlatform(pitEnd + (levelWidth - pitEnd) / 2, groundY, levelWidth - pitEnd, 48, GROUND_COLOR);
+
+    this._addPlatform(420, groundY - 120, 160, 24, PLATFORM_COLOR);
+    this._addPlatform(720, groundY - 200, 160, 24, PLATFORM_COLOR);
+    this._addPlatform(1040, groundY - 120, 160, 24, PLATFORM_COLOR);
+
+    this._addMovingPlatform(1700, groundY - 160, 140, 24, MOVING_PLATFORM_COLOR, {
+      axis: 'y',
+      range: 80,
+      speed: 70,
+    });
+
+    this._addHazard(1300, groundTopY - 10, 60, 20, HAZARD_COLOR);
+
+    this._addGoal(levelWidth - 80, groundTopY);
 
     this.player = new Stickman(this, 80, groundY - 80);
     this.physics.add.collider(this.player, this.platforms);
+    this.physics.add.overlap(this.player, this.hazards, () => this._finish(false), undefined, this);
+    this.physics.add.overlap(this.player, this.goal, () => this._finish(true), undefined, this);
 
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setDeadzone(120, 80);
@@ -40,9 +73,11 @@ export default class GameScene extends Phaser.Scene {
       .setOrigin(0.5, 0)
       .setDepth(10);
 
-    // TODO (Phase 2): hazards, goal object, HUD, real win/lose triggers via overlap.
-    this.input.keyboard.once('keydown-W', () => this.scene.start('GameOverScene', { won: true }));
-    this.input.keyboard.once('keydown-L', () => this.scene.start('GameOverScene', { won: false }));
+    // TODO (Phase 3): pull HUD/instruction strings from i18n instead of hardcoding.
+    this.hudText = this.add
+      .text(16, 16, 'Time: 0.0s', { fontSize: '16px', color: '#ffffff' })
+      .setScrollFactor(0)
+      .setDepth(10);
   }
 
   _addPlatform(x, y, w, h, color) {
@@ -52,7 +87,62 @@ export default class GameScene extends Phaser.Scene {
     return rect;
   }
 
+  _addMovingPlatform(x, y, w, h, color, { axis, range, speed }) {
+    const rect = this.add.rectangle(x, y, w, h, color);
+    this.physics.add.existing(rect);
+    rect.body.setAllowGravity(false);
+    rect.body.setImmovable(true);
+    rect.body.velocity[axis] = speed;
+    // Simple patrol: real Arcade velocity (not a manually-set position) is what lets
+    // collision separation carry a rider along with the platform for free.
+    rect._patrol = { axis, origin: axis === 'x' ? x : y, range, speed };
+    this.platforms.push(rect);
+    this.movingPlatforms.push(rect);
+    return rect;
+  }
+
+  _addHazard(x, y, w, h, color) {
+    const rect = this.add.rectangle(x, y, w, h, color);
+    this.physics.add.existing(rect, true);
+    this.hazards.push(rect);
+    return rect;
+  }
+
+  _addGoal(x, groundTopY) {
+    const poleHeight = 70;
+    const container = this.add.container(x, groundTopY);
+
+    const pole = this.add.rectangle(0, -poleHeight / 2, 4, poleHeight, GOAL_POLE_COLOR);
+    const flag = this.add.triangle(0, -poleHeight + 16, 0, -12, 24, -4, 0, 4, GOAL_FLAG_COLOR);
+    container.add([pole, flag]);
+
+    this.physics.add.existing(container);
+    container.body.setAllowGravity(false);
+    container.body.setImmovable(true);
+    container.body.setSize(30, poleHeight);
+    container.body.setOffset(-15, -poleHeight);
+
+    this.goal = container;
+    return container;
+  }
+
+  _finish(won) {
+    if (this.finished) return;
+    this.finished = true;
+    this.player.setMove(0);
+    this.scene.start('GameOverScene', { won });
+  }
+
   update(time, delta) {
+    if (this.finished) return;
+
+    for (const platform of this.movingPlatforms) {
+      const { axis, origin, range, speed } = platform._patrol;
+      const pos = platform[axis];
+      if (pos > origin + range) platform.body.velocity[axis] = -Math.abs(speed);
+      else if (pos < origin - range) platform.body.velocity[axis] = Math.abs(speed);
+    }
+
     const left = this.cursors.left.isDown || this.keys.A.isDown;
     const right = this.cursors.right.isDown || this.keys.D.isDown;
     const jumpPressed =
@@ -64,7 +154,14 @@ export default class GameScene extends Phaser.Scene {
 
     this.player.setMove(dir);
     if (jumpPressed) this.player.jump();
-
     this.player.update(time, delta);
+
+    if (this.player.y > this.deathY) {
+      this._finish(false);
+      return;
+    }
+
+    this.elapsedMs += delta;
+    this.hudText.setText(`Time: ${(this.elapsedMs / 1000).toFixed(1)}s`);
   }
 }

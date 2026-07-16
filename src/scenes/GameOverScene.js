@@ -23,6 +23,6 @@ export default class GameOverScene extends Phaser.Scene {
 
     // TODO (Phase 3): replace hardcoded strings with i18n lookups.
 
-    this.input.keyboard.once('keydown-R', () => this.scene.start('MenuScene'));
+    this.input.keyboard.once('keydown-R', () => this.scene.start('GameScene'));
   }
 }

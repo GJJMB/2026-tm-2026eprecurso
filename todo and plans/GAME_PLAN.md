@@ -27,11 +27,11 @@ to keep that box checked.
 
 ## Mandatory requirements this MVP must hit (from the spec)
 
-- [ ] Player controlled by keyboard, clear movement (run + jump)
-- [ ] Game elements that react to time/input (moving platforms or hazards)
-- [ ] Collisions via Arcade `overlap`/`collider`
-- [ ] Visible game state (lives or timer or checkpoint progress)
-- [ ] Game Over and/or Victory condition, with reset (press R / button)
+- [x] Player controlled by keyboard, clear movement (run + jump)
+- [x] Game elements that react to time/input (moving platform + spike hazard + pit)
+- [x] Collisions via Arcade `overlap`/`collider`
+- [x] Visible game state (HUD elapsed-time counter)
+- [x] Game Over and/or Victory condition, with reset (press R / button)
 - [ ] At least 1 integrated sound
 - [ ] ≥ 2 languages (PT + EN) with an accessible selector, no duplicated UI strings in code
 - [ ] Reasonable asset sizes (compressed audio, proportional sprites, no unused assets)
@@ -87,13 +87,29 @@ to keep that box checked.
   scissor-legs jump pose rising vs falling) — verified visually via headless-Chromium screenshots
   at each state
 
-### Phase 2 — Level content + goal (target: 3-4h)
-- One hazard/obstacle type that reacts to time or input (e.g. moving platform via tween, or a
-  spike/pit that triggers Game Over on `overlap`)
-- End-of-level goal object; reaching it via `overlap` triggers Victory
-- Falling off the world / touching hazard triggers Game Over
-- Visible game state: simple HUD (timer counting up, or lives counter, or checkpoint text)
-- Reset: pressing R (or a button in GameOverScene) restarts GameScene cleanly
+### Phase 2 — Level content + goal (target: 3-4h) — DONE
+- [x] Pit gap in the ground (x 900–1050) — falling past `deathY` (viewport height + 150,
+  with physics world bounds extended below the visible area for room to actually fall)
+  triggers Game Over. World/camera bound distinction matters here: `collideWorldBounds`
+  stayed on as a safety net, but the world was made taller than the camera so the fall is
+  visible before the death check fires.
+- [x] Moving platform (`_addMovingPlatform`, vertical patrol) — a real Arcade `velocity`-driven
+  patrol, not a manually-set position each frame, so Arcade's own collision separation
+  carries a rider for free (confirmed: player Y tracked platform Y with a stable ~12px
+  offset while `touching.down` stayed true)
+- [x] Static spike hazard — `overlap` with the player triggers Game Over
+- [x] Goal flag (pole + triangle, `Container` + Arcade body) at the end of the level —
+  `overlap` triggers Victory
+- [x] HUD: elapsed-time counter, top-left, pauses once the run ends
+- [x] Reset: `GameOverScene` R now restarts `GameScene` directly (not via MenuScene)
+- All four end states (goal win, hazard lose, pit-fall lose, moving-platform ride) verified
+  via headless-Chromium with direct state teleportation (`body.reset`) for determinism,
+  since blindly holding arrow keys in real time to reach each trigger would have been slow
+  and imprecise. One test-coordinate gotcha along the way, not a game bug: the x=1040
+  floating platform's footprint (960–1120) overlaps most of the pit gap (900–1050) by
+  design (an elevated alternate path across the pit) — an early test teleport landed on
+  its edge instead of falling, which looked like a broken pit until the coordinate was
+  moved to x=930, safely inside the open part of the gap.
 
 ### Phase 3 — Audio + i18n (target: 2-3h — do NOT skip, both are hard requirements)
 - Add jump sound + one more (win/death) — compress to OGG/MP3, keep files small
