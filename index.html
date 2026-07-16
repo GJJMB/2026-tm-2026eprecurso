@@ -102,6 +102,18 @@
       background: #5c7bff;
     }
 
+    #go-title.win {
+      color: #7CFC00;
+    }
+    #go-title.lose {
+      color: #ff5555;
+    }
+    .hint {
+      margin: 4px 0 0;
+      font-size: 13px;
+      color: #888;
+    }
+
     .lang-row {
       margin-top: 20px;
     }
@@ -151,6 +163,14 @@
       <h2 id="pm-title"></h2>
       <button id="pm-restart" class="btn primary"></button>
       <button id="pm-leave" class="btn"></button>
+    </div>
+  </div>
+
+  <div id="game-over-menu" class="overlay hidden">
+    <div class="panel">
+      <h2 id="go-title"></h2>
+      <button id="go-restart" class="btn primary"></button>
+      <p id="go-hint" class="hint"></p>
     </div>
   </div>
 
