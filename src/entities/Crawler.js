@@ -37,7 +37,7 @@ export default class Crawler extends Actor {
       this.direction = 1;
       this.body.setVelocityX(this.direction * this.speed);
     }
-    // Keep it on a fixed y (optional – if you want it to follow ground, you'd need raycasting)
+    // Keep it on a fixed y (optional  if you want it to follow ground, you'd need raycasting)
     // For simplicity, we assume it's placed on ground and stays there.
   }
 

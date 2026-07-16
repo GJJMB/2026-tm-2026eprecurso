@@ -10,6 +10,7 @@ import {
   groundRow,
   isValidSection,
   mergeRowRuns,
+  tileStyleKind,
 } from '../world/levelFormat.js';
 
 const els = {
@@ -18,7 +19,8 @@ const els = {
   rows: document.getElementById('section-rows'),
   resizeBtn: document.getElementById('resize-btn'),
   newBtn: document.getElementById('new-btn'),
-  toolBtns: Array.from(document.querySelectorAll('.tool-btn')),
+  fgToolGrid: document.getElementById('fg-tool-grid'),
+  bgToolGrid: document.getElementById('bg-tool-grid'),
   grid: document.getElementById('grid'),
   jsonPreview: document.getElementById('json-preview'),
   applyJsonBtn: document.getElementById('apply-json-btn'),
@@ -27,6 +29,16 @@ const els = {
   importLabelBtn: document.getElementById('import-section-label-btn'),
   levelId: document.getElementById('level-id'),
   levelParallax: document.getElementById('level-parallax'),
+  groundTilesetField: document.getElementById('ground-tileset-field'),
+  hazardTilesetField: document.getElementById('hazard-tileset-field'),
+  bgTilesetField: document.getElementById('bg-tileset-field'),
+  layerFgBtn: document.getElementById('layer-fg-btn'),
+  layerBgBtn: document.getElementById('layer-bg-btn'),
+  fgTools: document.getElementById('fg-tools'),
+  bgTools: document.getElementById('bg-tools'),
+  entitiesSection: document.getElementById('entities-section'),
+  bgList: document.getElementById('bg-list'),
+  bgListEmpty: document.getElementById('bg-list-empty'),
   addSectionInput: document.getElementById('add-section-input'),
   addSectionBtn: document.getElementById('add-section-btn'),
   sectionList: document.getElementById('section-list'),
@@ -74,6 +86,16 @@ const ENEMY_MARKER_CLASS = {
 
 const DEFAULT_SEGMENT_SPEED = 70;
 const DEFAULT_MOVING_PLATFORM_WIDTH_CELLS = 3;
+const DEFAULT_MOVING_PLATFORM_HEIGHT_CELLS = 1;
+const DEFAULT_MOVING_PLATFORM_COLOR = '#4f7a5c';
+const DEFAULT_GROUND_COLOR = '#4a4a5e';
+const DEFAULT_HAZARD_COLOR = '#d1495b';
+const DEFAULT_BACKGROUND_COLOR = '#2e3a4a';
+
+// Extra single-character slots a section can hand out to its own Ground/Hazard/Background
+// variants (see levelFormat.js's tileStyleKind docs) — '.', 'G', 'H', 'B' are reserved, so
+// this pool is picked from every other easily-typed printable character.
+const VARIANT_CHAR_POOL = '123456789abcdefghijklmnopqrstuvwxyzACDEFIJKLMNOPQRSTUVWXYZ'.split('');
 
 // Must match the .cell width/gap in editor.html's CSS — used to place the SVG path
 // overlay's points without needing a DOM measurement round-trip.
@@ -84,6 +106,8 @@ function makeMovingPlatformEntity(row, col) {
   return {
     type: ENTITY_TYPES.MOVING_PLATFORM,
     widthCells: DEFAULT_MOVING_PLATFORM_WIDTH_CELLS,
+    heightCells: DEFAULT_MOVING_PLATFORM_HEIGHT_CELLS,
+    color: DEFAULT_MOVING_PLATFORM_COLOR,
     waypoints: [
       { col, row },
       { col: Math.min(state.cols - 1, col + 3), row },
@@ -104,15 +128,38 @@ function makeBlankState(id, cols, rows) {
     cols,
     rows,
     grid: emptyGrid(cols, rows).map((row) => row.split('')),
+    // Decorative layer, same dimensions as `grid` — see levelFormat.js's bgGrid docs.
+    bgGrid: emptyGrid(cols, rows).map((row) => row.split('')),
     entities: [],
+    // This section's own floor/wall/backdrop tileset (see levelFormat.js's tileStyles
+    // docs) — each section keeps its own, rather than sharing one level-wide look.
+    tileStyles: {
+      [CELL.GROUND]: { color: DEFAULT_GROUND_COLOR },
+      [CELL.HAZARD]: { color: DEFAULT_HAZARD_COLOR },
+      [CELL.BACKGROUND]: { color: DEFAULT_BACKGROUND_COLOR },
+    },
   };
 }
 
 let state = makeBlankState('new-section', DEFAULT_COLS, DEFAULT_ROWS);
+let currentLayer = 'foreground'; // 'foreground' | 'background' — which grid painting/tools target
 let currentTool = CELL.GROUND;
 let isPainting = false;
 let paintValue = CELL.GROUND;
 let levelSections = [];
+
+// Sprite keys available for the "Sprite" appearance mode, fetched once from
+// assets/images/platform-textures.json (the editor is plain static JS, not a Phaser
+// scene, so it can't use PlatformTextures.js's loader — a plain fetch does the same job).
+let textureKeys = [];
+fetch('assets/images/platform-textures.json')
+  .then((res) => res.json())
+  .then((manifest) => {
+    textureKeys = Object.keys(manifest);
+    renderTilesetFields();
+    renderInspector();
+  })
+  .catch(() => {});
 
 // Unified selection for the right sidebar's shared inspector:
 // { kind: 'entity', index } for a placed entity, or
@@ -122,6 +169,88 @@ let selection = null;
 // Set while a "Reposition" button on a moving platform's waypoint is armed: the next
 // grid click sets that waypoint's position instead of painting/placing/selecting.
 let placingWaypoint = null; // { entityIndex, waypointIndex } | null
+
+// --- Tile variants ---
+//
+// A section's tileStyles isn't limited to the three base characters (G/H/B): "+ Add
+// variant" hands out one more character from VARIANT_CHAR_POOL, so e.g. a section can
+// paint two visually distinct Ground brushes ('G' and, say, '1') that both behave as
+// solid ground (see levelFormat.js's tileStyleKind). Foreground variants carry an
+// explicit `kind` ('ground'/'hazard'); background variants don't need one — everything
+// in bgGrid is decorative by construction.
+
+/** Every non-base character whose tileStyleKind resolves to `kind`, in creation order. */
+function variantCharsOfKind(kind) {
+  return Object.keys(state.tileStyles).filter(
+    (c) => c !== CELL.GROUND && c !== CELL.HAZARD && c !== CELL.BACKGROUND && tileStyleKind(c, state.tileStyles) === kind
+  );
+}
+
+/** Display label for any foreground/background character, base or variant — "Ground",
+ * "Ground 2", "Hazard 3", "Background 2", etc. */
+function styleLabel(char) {
+  if (char === CELL.GROUND) return 'Ground';
+  if (char === CELL.HAZARD) return 'Hazard';
+  if (char === CELL.BACKGROUND) return 'Background';
+  const kind = tileStyleKind(char, state.tileStyles);
+  const kindLabel = kind === 'hazard' ? 'Hazard' : kind === 'background' ? 'Background' : 'Ground';
+  const idx = variantCharsOfKind(kind).indexOf(char);
+  return `${kindLabel} ${idx + 2}`; // base itself is implicitly "1"
+}
+
+/** Swatch color for any foreground/background character — used by tool buttons, the
+ * Platforms/Background lists, and cell fill color. Sprite-only variants (no `color` set)
+ * fall back to a neutral placeholder since the editor can't preview actual sprite pixels. */
+function cellSwatchColor(char) {
+  if (char === CELL.EMPTY) return '';
+  const style = state.tileStyles[char];
+  if (!style) return '#888';
+  return style.color || '#57607a';
+}
+
+function nextVariantChar() {
+  const used = new Set(Object.keys(state.tileStyles));
+  return VARIANT_CHAR_POOL.find((c) => !used.has(c)) || null;
+}
+
+function addVariant(kind) {
+  const char = nextVariantChar();
+  if (!char) {
+    alert('No more tile-variant slots available for this section.');
+    return;
+  }
+  const defaultColor =
+    kind === 'hazard' ? DEFAULT_HAZARD_COLOR : kind === 'background' ? DEFAULT_BACKGROUND_COLOR : DEFAULT_GROUND_COLOR;
+  state.tileStyles[char] = kind === 'background' ? { color: defaultColor } : { kind, color: defaultColor };
+  renderTilesetFields();
+  renderFgToolButtons();
+  renderBgToolButtons();
+  syncPreview();
+}
+
+/** Deletes a variant and clears any cells painted with it back to empty — a dangling
+ * character with no tileStyles entry would otherwise render with the '#888' fallback and
+ * silently break re-export/re-import round-tripping. */
+function removeVariant(char) {
+  if (char === CELL.GROUND || char === CELL.HAZARD || char === CELL.BACKGROUND) return;
+  if (!confirm('Remove this variant? Any tiles painted with it will be cleared back to empty.')) return;
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) {
+      if (state.grid[r][c] === char) state.grid[r][c] = CELL.EMPTY;
+      if (state.bgGrid[r][c] === char) state.bgGrid[r][c] = CELL.EMPTY;
+    }
+  }
+  delete state.tileStyles[char];
+  if (currentTool === char) currentTool = currentLayer === 'background' ? CELL.BACKGROUND : CELL.GROUND;
+  renderGrid();
+  renderTilesetFields();
+  renderFgToolButtons();
+  renderBgToolButtons();
+  refreshPlatformSelection();
+  refreshBgSelection();
+  afterSelectionChange();
+  syncPreview();
+}
 
 // --- Rendering ---
 
@@ -137,13 +266,67 @@ function renderGrid() {
       cell.className = 'cell' + (row === lastRow ? ' ground-row' : '');
       cell.dataset.row = String(row);
       cell.dataset.col = String(col);
-      cell.dataset.type = state.grid[row][col];
       cell.addEventListener('mousedown', onCellMouseDown);
       cell.addEventListener('mouseenter', onCellMouseEnter);
       els.grid.appendChild(cell);
+      updateCellVisual(row, col);
     }
   }
   renderMarkersAndHighlight();
+}
+
+/**
+ * Renders the current section's Ground/Hazard/Background tileset pickers, each as a base
+ * appearance field plus any of that kind's variants (see the "Tile variants" section
+ * above) with their own appearance field and a remove button, plus an "+ Add variant" button.
+ */
+function renderTileStyleGroup(container, kindLabel, baseChar, kind, defaultColor) {
+  const chars = [baseChar, ...variantCharsOfKind(kind)];
+  chars.forEach((char, idx) => {
+    const block = document.createElement('div');
+    block.className = 'variant-block';
+    addAppearanceField(
+      block,
+      idx === 0 ? `${kindLabel} appearance` : `${kindLabel} ${idx + 1}`,
+      state.tileStyles[char],
+      defaultColor,
+      () => {
+        syncPreview();
+        refreshGridColors();
+        renderFgToolButtons();
+        renderBgToolButtons();
+      },
+      renderTilesetFields
+    );
+    if (idx > 0) {
+      const removeBtn = document.createElement('button');
+      removeBtn.textContent = 'Remove variant';
+      removeBtn.className = 'danger';
+      removeBtn.style.width = '100%';
+      removeBtn.style.marginTop = '4px';
+      removeBtn.addEventListener('click', () => removeVariant(char));
+      block.appendChild(removeBtn);
+    }
+    container.appendChild(block);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.textContent = `+ Add ${kindLabel.toLowerCase()} variant`;
+  addBtn.style.width = '100%';
+  addBtn.style.marginTop = '10px';
+  addBtn.addEventListener('click', () => addVariant(kind));
+  container.appendChild(addBtn);
+}
+
+function renderTilesetFields() {
+  els.groundTilesetField.innerHTML = '';
+  renderTileStyleGroup(els.groundTilesetField, 'Ground', CELL.GROUND, 'ground', DEFAULT_GROUND_COLOR);
+
+  els.hazardTilesetField.innerHTML = '';
+  renderTileStyleGroup(els.hazardTilesetField, 'Hazard', CELL.HAZARD, 'hazard', DEFAULT_HAZARD_COLOR);
+
+  els.bgTilesetField.innerHTML = '';
+  renderTileStyleGroup(els.bgTilesetField, 'Background', CELL.BACKGROUND, 'background', DEFAULT_BACKGROUND_COLOR);
 }
 
 function cellEl(row, col) {
@@ -152,7 +335,21 @@ function cellEl(row, col) {
 
 function updateCellVisual(row, col) {
   const cell = cellEl(row, col);
-  if (cell) cell.dataset.type = state.grid[row][col];
+  if (!cell) return;
+  const fgChar = state.grid[row][col];
+  const bgChar = state.bgGrid[row][col];
+  cell.dataset.type = fgChar;
+  cell.dataset.bgtype = bgChar;
+  cell.style.background = cellSwatchColor(fgChar) || cellSwatchColor(bgChar) || '';
+  cell.classList.toggle('has-bg-under-fg', fgChar !== CELL.EMPTY && bgChar !== CELL.EMPTY);
+}
+
+/** Re-applies every cell's fill color — needed after a tileStyles color/texture edit,
+ * since already-painted cells otherwise keep showing their old color. */
+function refreshGridColors() {
+  for (let r = 0; r < state.rows; r++) {
+    for (let c = 0; c < state.cols; c++) updateCellVisual(r, c);
+  }
 }
 
 function renderMarkersAndHighlight() {
@@ -205,7 +402,7 @@ function renderMarkersAndHighlight() {
     if (isSelected) outline(cell, '#fff');
   });
 
-  if (selection && selection.kind === 'platform') {
+  if (selection && (selection.kind === 'platform' || selection.kind === 'bgplatform')) {
     for (let c = selection.startCol; c < selection.startCol + selection.colSpan; c++) {
       outline(cellEl(selection.row, c), '#fff');
     }
@@ -272,6 +469,26 @@ function refreshPlatformSelection() {
   selection = match ? { kind: 'platform', ...match } : null;
 }
 
+/** Every contiguous background-tile run — the decorative-layer equivalent of getPlatformRuns. */
+function getBgRuns() {
+  const runs = [];
+  for (let row = 0; row < state.rows; row++) {
+    for (const run of mergeRowRuns(state.bgGrid[row].join(''))) {
+      runs.push({ row, startCol: run.startCol, colSpan: run.colSpan, type: run.type });
+    }
+  }
+  return runs;
+}
+
+/** Re-locate the selected background run after a grid edit, mirroring refreshPlatformSelection. */
+function refreshBgSelection() {
+  if (!selection || selection.kind !== 'bgplatform') return;
+  const match = getBgRuns().find(
+    (r) => r.row === selection.row && selection.startCol >= r.startCol && selection.startCol < r.startCol + r.colSpan
+  );
+  selection = match ? { kind: 'bgplatform', ...match } : null;
+}
+
 // --- Selection / inspector ---
 
 function selectEntity(idx) {
@@ -283,6 +500,12 @@ function selectEntity(idx) {
 function selectPlatform(run) {
   placingWaypoint = null;
   selection = { kind: 'platform', ...run };
+  afterSelectionChange();
+}
+
+function selectBgPlatform(run) {
+  placingWaypoint = null;
+  selection = { kind: 'bgplatform', ...run };
   afterSelectionChange();
 }
 
@@ -339,6 +562,7 @@ function afterSelectionChange() {
   renderMarkersAndHighlight();
   renderEntityList();
   renderPlatformList();
+  renderBgList();
   renderInspector();
 }
 
@@ -446,29 +670,113 @@ function addSegmentSpeedsField(container, entity) {
   container.appendChild(wrap);
 }
 
-function addTypeToggleField(container, labelText, currentType) {
+/** Lets a selected platform/background run be repainted with any Ground/Hazard variant
+ * (or, on the background layer, any Background variant) — the run-level equivalent of
+ * picking a tool brush, for reassigning an already-placed run's look after the fact. */
+function addVariantPickerField(container, labelText, currentType, kinds) {
   const wrap = document.createElement('div');
-  wrap.className = 'type-toggle';
-  const makeBtn = (type, label) => {
+  wrap.className = 'variant-picker';
+  const chars = kinds.flatMap((kind) => {
+    const base = kind === 'hazard' ? CELL.HAZARD : kind === 'background' ? CELL.BACKGROUND : CELL.GROUND;
+    return [base, ...variantCharsOfKind(kind)];
+  });
+  chars.forEach((char) => {
     const btn = document.createElement('button');
-    btn.textContent = label;
-    btn.className = type === currentType ? 'primary' : '';
-    btn.addEventListener('click', () => setSelectedPlatformType(type));
-    return btn;
-  };
-  wrap.append(makeBtn(CELL.GROUND, 'Ground'), makeBtn(CELL.HAZARD, 'Hazard'));
+    btn.className = 'tool-btn' + (char === currentType ? ' active' : '');
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = cellSwatchColor(char);
+    btn.append(swatch, document.createTextNode(styleLabel(char)));
+    btn.addEventListener('click', () => setSelectedPlatformType(char));
+    wrap.appendChild(btn);
+  });
   addFieldRow(container, labelText, wrap);
 }
 
 function setSelectedPlatformType(newType) {
-  if (!selection || selection.kind !== 'platform') return;
+  if (!selection || (selection.kind !== 'platform' && selection.kind !== 'bgplatform')) return;
+  const targetGrid = selection.kind === 'bgplatform' ? state.bgGrid : state.grid;
   for (let c = selection.startCol; c < selection.startCol + selection.colSpan; c++) {
-    state.grid[selection.row][c] = newType;
+    targetGrid[selection.row][c] = newType;
     updateCellVisual(selection.row, c);
   }
   refreshPlatformSelection();
+  refreshBgSelection();
   afterSelectionChange();
   syncPreview();
+}
+
+/**
+ * A Color/Sprite appearance picker bound to `obj` (a moving platform entity, or one of the
+ * current section's tileStyles entries — anything shaped `{ color, texture }`). Switching
+ * mode deletes the other field, so exported JSON never carries both at once — texture
+ * always wins over color at runtime (see levelFormat.js) so a stale leftover would
+ * otherwise silently do nothing.
+ */
+function addAppearanceField(container, labelText, obj, defaultColor, onValueChange, rerender) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+  const label = document.createElement('label');
+  label.textContent = labelText;
+  wrap.appendChild(label);
+
+  const mode = obj.texture ? 'sprite' : 'color';
+
+  const toggle = document.createElement('div');
+  toggle.className = 'type-toggle';
+  const makeModeBtn = (targetMode, text) => {
+    const btn = document.createElement('button');
+    btn.textContent = text;
+    btn.className = mode === targetMode ? 'primary' : '';
+    btn.addEventListener('click', () => {
+      if (mode === targetMode) return;
+      if (targetMode === 'color') {
+        delete obj.texture;
+        obj.color = obj.color || defaultColor;
+      } else {
+        delete obj.color;
+        obj.texture = textureKeys[0] || '';
+      }
+      onValueChange();
+      rerender();
+    });
+    return btn;
+  };
+  toggle.append(makeModeBtn('color', 'Color'), makeModeBtn('sprite', 'Sprite'));
+  wrap.appendChild(toggle);
+
+  if (mode === 'color') {
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.value = obj.color || defaultColor;
+    input.addEventListener('input', () => {
+      obj.color = input.value;
+      onValueChange();
+    });
+    wrap.appendChild(input);
+  } else if (textureKeys.length) {
+    const select = document.createElement('select');
+    textureKeys.forEach((key) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = key;
+      if (obj.texture === key) opt.selected = true;
+      select.appendChild(opt);
+    });
+    select.addEventListener('change', () => {
+      obj.texture = select.value;
+      onValueChange();
+    });
+    wrap.appendChild(select);
+  } else {
+    const hint = document.createElement('p');
+    hint.className = 'hint';
+    hint.style.marginTop = '6px';
+    hint.textContent = 'No sprite textures available yet — add one to assets/images/platform-textures.json.';
+    wrap.appendChild(hint);
+  }
+
+  container.appendChild(wrap);
 }
 
 function renderInspector() {
@@ -497,6 +805,18 @@ function renderInspector() {
         entity.widthCells = v;
         syncPreview();
       });
+      addNumberField(els.inspectorFields, 'Height (cells)', entity.heightCells || 1, (v) => {
+        entity.heightCells = v;
+        syncPreview();
+      });
+      addAppearanceField(
+        els.inspectorFields,
+        'Appearance',
+        entity,
+        DEFAULT_MOVING_PLATFORM_COLOR,
+        syncPreview,
+        renderInspector
+      );
       addWaypointsField(els.inspectorFields, selection.index, entity);
       addSegmentSpeedsField(els.inspectorFields, entity);
       if (placingWaypoint && placingWaypoint.entityIndex === selection.index) {
@@ -514,15 +834,24 @@ function renderInspector() {
         });
       }
     }
-  } else {
-    els.inspectorTitle.textContent = selection.type === CELL.HAZARD ? 'Hazard' : 'Ground / Platform';
+  } else if (selection.kind === 'bgplatform') {
+    els.inspectorTitle.textContent = styleLabel(selection.type);
     const lastCol = selection.startCol + selection.colSpan - 1;
     addReadonlyField(
       els.inspectorFields,
       'Position',
-      `row ${selection.row}, cols ${selection.startCol}–${lastCol} (${selection.colSpan} cells)`
+      `row ${selection.row}, cols ${selection.startCol}-${lastCol} (${selection.colSpan} cells)`
     );
-    addTypeToggleField(els.inspectorFields, 'Type', selection.type);
+    addVariantPickerField(els.inspectorFields, 'Type', selection.type, ['background']);
+  } else {
+    els.inspectorTitle.textContent = styleLabel(selection.type);
+    const lastCol = selection.startCol + selection.colSpan - 1;
+    addReadonlyField(
+      els.inspectorFields,
+      'Position',
+      `row ${selection.row}, cols ${selection.startCol}-${lastCol} (${selection.colSpan} cells)`
+    );
+    addVariantPickerField(els.inspectorFields, 'Type', selection.type, ['ground', 'hazard']);
   }
 }
 
@@ -531,6 +860,11 @@ els.inspectorDelete.addEventListener('click', () => {
   placingWaypoint = null;
   if (selection.kind === 'entity') {
     state.entities.splice(selection.index, 1);
+  } else if (selection.kind === 'bgplatform') {
+    for (let c = selection.startCol; c < selection.startCol + selection.colSpan; c++) {
+      state.bgGrid[selection.row][c] = CELL.EMPTY;
+      updateCellVisual(selection.row, c);
+    }
   } else {
     for (let c = selection.startCol; c < selection.startCol + selection.colSpan; c++) {
       state.grid[selection.row][c] = CELL.EMPTY;
@@ -579,11 +913,11 @@ function renderPlatformList() {
 
     const swatch = document.createElement('span');
     swatch.className = 'swatch';
-    swatch.style.background = run.type === CELL.HAZARD ? '#d1495b' : '#4a4a5e';
+    swatch.style.background = cellSwatchColor(run.type);
 
     const label = document.createElement('span');
     label.className = 'obj-item-label';
-    label.textContent = `${run.type === CELL.HAZARD ? 'Hazard' : 'Ground'} — row ${run.row}, cols ${run.startCol}-${run.startCol + run.colSpan - 1}`;
+    label.textContent = `${styleLabel(run.type)} — row ${run.row}, cols ${run.startCol}-${run.startCol + run.colSpan - 1}`;
 
     li.append(swatch, label);
     li.addEventListener('click', () => selectPlatform(run));
@@ -592,13 +926,39 @@ function renderPlatformList() {
   els.platformListEmpty.classList.toggle('hidden', runs.length > 0);
 }
 
+function renderBgList() {
+  els.bgList.innerHTML = '';
+  const runs = getBgRuns();
+  runs.forEach((run) => {
+    const li = document.createElement('li');
+    const isSelected =
+      selection && selection.kind === 'bgplatform' && selection.row === run.row && selection.startCol === run.startCol;
+    li.className = 'obj-item' + (isSelected ? ' selected' : '');
+
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.background = cellSwatchColor(run.type);
+
+    const label = document.createElement('span');
+    label.className = 'obj-item-label';
+    label.textContent = `${styleLabel(run.type)} — row ${run.row}, cols ${run.startCol}-${run.startCol + run.colSpan - 1}`;
+
+    li.append(swatch, label);
+    li.addEventListener('click', () => selectBgPlatform(run));
+    els.bgList.appendChild(li);
+  });
+  els.bgListEmpty.classList.toggle('hidden', runs.length > 0);
+}
+
 function exportSection() {
   return {
     id: state.id,
     cols: state.cols,
     rows: state.rows,
     grid: state.grid.map((row) => row.join('')),
+    bgGrid: state.bgGrid.map((row) => row.join('')),
     entities: state.entities,
+    tileStyles: state.tileStyles,
   };
 }
 
@@ -629,7 +989,19 @@ function onCellMouseDown(e) {
     return;
   }
 
-  if (currentTool === CELL.GROUND || currentTool === CELL.HAZARD || currentTool === CELL.EMPTY) {
+  // Background layer only ever paints (Background/Eraser/variants) — no entities — so it
+  // can't fall through to the entity-placement logic below.
+  if (currentLayer === 'background') {
+    isPainting = true;
+    paintValue = currentTool;
+    paintCell(row, col);
+    return;
+  }
+
+  // Paint tools are single-char cell types (Ground/Hazard/Eraser and any variant — see the
+  // "Tile variants" section above); entity tools are the longer ENTITY_TYPES strings
+  // ('playerSpawn', 'movingPlatform', ...), so length alone tells them apart.
+  if (currentTool.length === 1) {
     isPainting = true;
     paintValue = currentTool;
     paintCell(row, col);
@@ -652,11 +1024,17 @@ function onCellMouseEnter(e) {
 }
 
 function paintCell(row, col) {
-  state.grid[row][col] = paintValue;
+  if (currentLayer === 'background') {
+    state.bgGrid[row][col] = paintValue;
+  } else {
+    state.grid[row][col] = paintValue;
+  }
   updateCellVisual(row, col);
   refreshPlatformSelection();
+  refreshBgSelection();
   renderMarkersAndHighlight();
   renderPlatformList();
+  renderBgList();
   renderInspector();
   syncPreview();
 }
@@ -687,13 +1065,68 @@ function placeEntity(row, col) {
 }
 
 // --- Toolbar ---
-
-els.toolBtns.forEach((btn) => {
-  btn.addEventListener('click', () => {
-    currentTool = btn.dataset.tool;
-    els.toolBtns.forEach((b) => b.classList.toggle('active', b === btn));
-  });
+//
+// Tool buttons (paint brushes in #fg-tool-grid/#bg-tool-grid, entity tabs in
+// #entities-section) are handled by one delegated listener rather than per-button
+// listeners, since the brush buttons are regenerated whenever a variant is added/removed
+// (see renderFgToolButtons/renderBgToolButtons) and per-button listeners would need
+// re-wiring on every regeneration.
+document.getElementById('sidebar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tool-btn');
+  if (!btn || !btn.dataset.tool) return;
+  currentTool = btn.dataset.tool;
+  syncToolButtonActive();
 });
+
+function syncToolButtonActive() {
+  document.querySelectorAll('.tool-btn').forEach((b) => b.classList.toggle('active', b.dataset.tool === currentTool));
+}
+
+function makeToolButton(char, label, color) {
+  const btn = document.createElement('button');
+  btn.className = 'tool-btn';
+  btn.dataset.tool = char;
+  const swatch = document.createElement('span');
+  swatch.className = 'swatch';
+  swatch.style.background = color;
+  btn.append(swatch, document.createTextNode(label));
+  return btn;
+}
+
+/** Rebuilds the Ground/Hazard/Eraser brush buttons from state.tileStyles — every Ground
+ * and Hazard variant (see the "Tile variants" section above) gets its own brush. */
+function renderFgToolButtons() {
+  els.fgToolGrid.innerHTML = '';
+  const chars = [CELL.GROUND, ...variantCharsOfKind('ground'), CELL.HAZARD, ...variantCharsOfKind('hazard')];
+  chars.forEach((c) => els.fgToolGrid.appendChild(makeToolButton(c, styleLabel(c), cellSwatchColor(c))));
+  els.fgToolGrid.appendChild(makeToolButton(CELL.EMPTY, 'Eraser', '#1d1d2b'));
+  syncToolButtonActive();
+}
+
+/** Background-layer equivalent of renderFgToolButtons. */
+function renderBgToolButtons() {
+  els.bgToolGrid.innerHTML = '';
+  const chars = [CELL.BACKGROUND, ...variantCharsOfKind('background')];
+  chars.forEach((c) => els.bgToolGrid.appendChild(makeToolButton(c, styleLabel(c), cellSwatchColor(c))));
+  els.bgToolGrid.appendChild(makeToolButton(CELL.EMPTY, 'Eraser', '#1d1d2b'));
+  syncToolButtonActive();
+}
+
+// --- Layers ---
+
+function setLayer(layer) {
+  currentLayer = layer;
+  els.layerFgBtn.classList.toggle('primary', layer === 'foreground');
+  els.layerBgBtn.classList.toggle('primary', layer === 'background');
+  els.fgTools.classList.toggle('hidden', layer !== 'foreground');
+  els.bgTools.classList.toggle('hidden', layer !== 'background');
+  els.entitiesSection.classList.toggle('hidden', layer !== 'foreground');
+  currentTool = layer === 'foreground' ? CELL.GROUND : CELL.BACKGROUND;
+  syncToolButtonActive();
+}
+
+els.layerFgBtn.addEventListener('click', () => setLayer('foreground'));
+els.layerBgBtn.addEventListener('click', () => setLayer('background'));
 
 // --- New / resize / load ---
 
@@ -704,9 +1137,14 @@ function loadState(next) {
   els.sectionId.value = state.id;
   els.cols.value = String(state.cols);
   els.rows.value = String(state.rows);
+  renderFgToolButtons();
+  renderBgToolButtons();
+  setLayer('foreground');
   renderGrid();
+  renderTilesetFields();
   renderEntityList();
   renderPlatformList();
+  renderBgList();
   renderInspector();
   syncPreview();
 }
@@ -757,7 +1195,22 @@ function importSectionData(data) {
     cols: data.cols,
     rows: data.rows,
     grid: data.grid.map((row) => row.split('')),
+    // Older section files predate bgGrid — default to an empty background layer rather
+    // than leaving state.bgGrid undefined.
+    bgGrid: (data.bgGrid && data.bgGrid.length === data.rows ? data.bgGrid : emptyGrid(data.cols, data.rows)).map((row) =>
+      row.split('')
+    ),
     entities: (data.entities || []).map((e) => ({ ...e })),
+    // Spread every incoming key first so custom variants (see the "Tile variants" section
+    // above) round-trip through export/import instead of being silently dropped; older
+    // section files predate per-section tileStyles entirely, so the three base entries
+    // are defaulted in afterwards rather than left with nothing bound to edit.
+    tileStyles: {
+      ...(data.tileStyles || {}),
+      [CELL.GROUND]: { color: DEFAULT_GROUND_COLOR, ...(data.tileStyles && data.tileStyles[CELL.GROUND]) },
+      [CELL.HAZARD]: { color: DEFAULT_HAZARD_COLOR, ...(data.tileStyles && data.tileStyles[CELL.HAZARD]) },
+      [CELL.BACKGROUND]: { color: DEFAULT_BACKGROUND_COLOR, ...(data.tileStyles && data.tileStyles[CELL.BACKGROUND]) },
+    },
   });
 }
 

@@ -5,7 +5,7 @@ import VomitSeagull from '../entities/VomitSeagull.js';
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
 import LevelLoader from '../world/LevelLoader.js';
-import { CELL, ENTITY_TYPES, DEFAULT_ENEMY_RANGE_COLS } from '../world/levelFormat.js';
+import { ENTITY_TYPES, DEFAULT_ENEMY_RANGE_COLS, normalizeCellSpan } from '../world/levelFormat.js';
 import { t } from '../i18n.js';
 import { showPauseMenu, hidePauseMenu } from '../ui/DomMenus.js';
 
@@ -15,9 +15,12 @@ const MOVING_PLATFORM_COLOR = 0x4f7a5c;
 const HAZARD_COLOR = 0xd1495b;
 const GOAL_POLE_COLOR = 0xd8d8d8;
 const GOAL_FLAG_COLOR = 0xffcc33;
+const BACKGROUND_COLOR = 0x2e3a4a;
+// Behind every interactable/foreground object (depth 0, Phaser's default) but in front of
+// the parallax backdrop (see assets/images/parallax-sets.json, depths -20/-10).
+const BACKGROUND_DEPTH = -5;
 
 const DEFAULT_LEVEL_KEY = 'level1';
-const DEFAULT_MOVING_PLATFORM_WIDTH_CELLS = 3;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -48,6 +51,9 @@ export default class GameScene extends Phaser.Scene {
 
     this.parallax = new ParallaxBackground(this, plan.parallax || levelKey);
 
+    // Resolved (texture-or-color) look for a given tile/platform "id" — see _resolveAppearance.
+    this._appearanceCache = new Map();
+
     this.platforms = [];
     this.movingPlatforms = [];
     this.hazards = [];
@@ -60,13 +66,39 @@ export default class GameScene extends Phaser.Scene {
     let spawn = { x: 80, y: groundY - 80 };
     let goalPos = { x: levelWidth - 80, yTop: groundTopY };
 
+    // Background layer — purely decorative "ground"-equivalent tiles (levelFormat.js's
+    // CELL.BACKGROUND / a section's optional bgGrid), drawn behind every foreground object
+    // with no physics body: nothing here ever collides with or blocks the player.
+    for (const tile of plan.bgTiles) {
+      const cx = tile.x + tile.w / 2;
+      const cy = tile.y + tile.h / 2;
+      const style = tile.style || {};
+      const id = this._appearanceId('background', style);
+      const appearance = this._resolveAppearance(id, style.texture, style.color, BACKGROUND_COLOR);
+      this._makeAppearanceObject(cx, cy, tile.w, tile.h, appearance).setDepth(BACKGROUND_DEPTH);
+    }
+
+    // Ground/hazard tiles are styled per-section (see levelFormat.js's docstring) via
+    // that section's own optional tileStyles — LevelLoader already resolved each tile's
+    // `style` (or null) and `kind` ('ground'/'hazard' — not necessarily implied by the
+    // literal character once a section defines its own variants) from its owning section,
+    // so no per-level lookup is needed here.
     for (const tile of plan.tiles) {
       const cx = tile.x + tile.w / 2;
       const cy = tile.y + tile.h / 2;
-      if (tile.type === CELL.HAZARD) {
-        this._addHazard(cx, cy, tile.w, tile.h, HAZARD_COLOR);
+      const style = tile.style || {};
+      if (tile.kind === 'hazard') {
+        const id = this._appearanceId('hazard', style);
+        const appearance = this._resolveAppearance(id, style.texture, style.color, HAZARD_COLOR);
+        this._addHazard(cx, cy, tile.w, tile.h, appearance);
       } else {
-        this._addPlatform(cx, cy, tile.w, tile.h, tile.isGroundRow ? GROUND_COLOR : PLATFORM_COLOR);
+        // The ground baseline row and any elevated platform share the same style/texture,
+        // but keep their own default fallback color when no style is set.
+        const base = tile.isGroundRow ? 'ground-baseline' : 'ground-elevated';
+        const fallback = tile.isGroundRow ? GROUND_COLOR : PLATFORM_COLOR;
+        const id = this._appearanceId(base, style);
+        const appearance = this._resolveAppearance(id, style.texture, style.color, fallback);
+        this._addPlatform(cx, cy, tile.w, tile.h, appearance);
       }
     }
 
@@ -80,8 +112,11 @@ export default class GameScene extends Phaser.Scene {
       } else if (entity.type === ENTITY_TYPES.GOAL) {
         goalPos = { x: entity.x, yTop: entity.yTop };
       } else if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
-        const w = (entity.widthCells || DEFAULT_MOVING_PLATFORM_WIDTH_CELLS) * plan.cellSize;
-        this._addMovingPlatform(entity.waypoints, w, plan.cellSize, MOVING_PLATFORM_COLOR, entity.speeds);
+        const w = normalizeCellSpan(entity.widthCells) * plan.cellSize;
+        const h = normalizeCellSpan(entity.heightCells) * plan.cellSize;
+        const id = this._appearanceId('movingPlatform', entity);
+        const appearance = this._resolveAppearance(id, entity.texture, entity.color, MOVING_PLATFORM_COLOR);
+        this._addMovingPlatform(entity.waypoints, w, h, appearance, entity.speeds);
       } else if (
         entity.type === ENTITY_TYPES.ENEMY_FALSE_FRIEND ||
         entity.type === ENTITY_TYPES.ENEMY_CRAWLER ||
@@ -175,8 +210,53 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // ---- helpers ----
-  _addPlatform(x, y, w, h, color) {
-    const rect = this.add.rectangle(x, y, w, h, color);
+
+  /**
+   * Builds a cache key for _resolveAppearance out of a `base` id (what kind of thing this
+   * is — 'hazard', 'ground-baseline', a moving platform, ...) plus the actual override
+   * values in `style`. Folding the override into the key (not just the base id) is what
+   * keeps two sections with different tileStyles for the same character from bleeding
+   * into each other's cached appearance, while identical styles across sections/tiles
+   * still correctly share one resolved entry.
+   */
+  _appearanceId(base, style) {
+    return `${base}:${style.texture || ''}:${style.color || ''}`;
+  }
+
+  /**
+   * Resolves (once per unique `id`) what to render a tile/platform as — a texture key
+   * (`texture`, if it names a loaded image) or a fill color (`color`, a CSS hex string or
+   * numeric 0xRRGGBB), falling back to `fallbackColor` when neither is given. Cached by
+   * `id` so e.g. every ground tile in a level only resolves/parses its style once, not
+   * once per tile instance.
+   */
+  _resolveAppearance(id, texture, color, fallbackColor) {
+    if (this._appearanceCache.has(id)) return this._appearanceCache.get(id);
+    let resolved;
+    if (texture && this.textures.exists(texture)) {
+      resolved = { texture };
+    } else if (color) {
+      resolved = { color: typeof color === 'string' ? Phaser.Display.Color.HexStringToColor(color).color : color };
+    } else {
+      resolved = { color: fallbackColor };
+    }
+    this._appearanceCache.set(id, resolved);
+    return resolved;
+  }
+
+  /** Builds a `w`x`h` game object at `x,y` per a resolved appearance — a stretched-to-fit
+   * Image if it names a texture, otherwise a flat-colored Rectangle. */
+  _makeAppearanceObject(x, y, w, h, appearance) {
+    if (appearance.texture) {
+      const img = this.add.image(x, y, appearance.texture);
+      img.setDisplaySize(w, h);
+      return img;
+    }
+    return this.add.rectangle(x, y, w, h, appearance.color);
+  }
+
+  _addPlatform(x, y, w, h, appearance) {
+    const rect = this._makeAppearanceObject(x, y, w, h, appearance);
     this.physics.add.existing(rect, true);
     this.platforms.push(rect);
     return rect;
@@ -187,9 +267,9 @@ export default class GameScene extends Phaser.Scene {
    * while traversing the segment between waypoints[i] and waypoints[i+1]. The platform
    * ping-pongs along the path: forward to the last waypoint, then back to the first.
    */
-  _addMovingPlatform(waypoints, w, h, color, speeds) {
+  _addMovingPlatform(waypoints, w, h, appearance, speeds) {
     const start = waypoints[0];
-    const rect = this.add.rectangle(start.x, start.y, w, h, color);
+    const rect = this._makeAppearanceObject(start.x, start.y, w, h, appearance);
     this.physics.add.existing(rect);
     rect.body.setAllowGravity(false);
     rect.body.setImmovable(true);
@@ -214,8 +294,8 @@ export default class GameScene extends Phaser.Scene {
     platform.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
   }
 
-  _addHazard(x, y, w, h, color) {
-    const rect = this.add.rectangle(x, y, w, h, color);
+  _addHazard(x, y, w, h, appearance) {
+    const rect = this._makeAppearanceObject(x, y, w, h, appearance);
     this.physics.add.existing(rect, true);
     this.hazards.push(rect);
     return rect;

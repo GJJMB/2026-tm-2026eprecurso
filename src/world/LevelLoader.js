@@ -1,4 +1,4 @@
-import { CELL_SIZE, ENTITY_TYPES, mergeRowRuns, rowToWorldY, colToWorldX, groundRow } from './levelFormat.js';
+import { CELL_SIZE, ENTITY_TYPES, mergeRowRuns, rowToWorldY, colToWorldX, groundRow, tileStyleKind } from './levelFormat.js';
 
 const LEVELS_SEQUENCE_KEY = 'levels';
 const LEVELS_SEQUENCE_PATH = 'assets/levels/levels.json';
@@ -80,9 +80,16 @@ export default class LevelLoader {
    * `groundTopY` anchors every section's ground row to the same baseline, so sections
    * authored independently still line up when strung together end to end.
    *
-   * Returns { parallax, cellSize, levelWidth, levelHeight, tiles, entities }, where
-   * tiles/entities are already in world pixel coordinates — GameScene turns those into
-   * actual Phaser game objects (that's the only part that needs physics/collider wiring).
+   * Returns { parallax, cellSize, levelWidth, levelHeight, tiles, bgTiles, entities },
+   * where tiles/bgTiles/entities are already in world pixel coordinates — GameScene turns
+   * those into actual Phaser game objects (that's the only part that needs
+   * physics/collider wiring). `tiles` is the interactable foreground layer (unchanged
+   * shape/semantics); `bgTiles` is the purely decorative background layer (see
+   * levelFormat.js's `bgGrid` docs) — same shape minus `isGroundRow`, since background
+   * tiles never collide and have no "ground baseline" concept. Each tile also carries its
+   * owning section's `style` (that section's tileStyles entry for the tile's character, or
+   * null), so differently-styled sections never bleed into each other even when strung
+   * into the same level.
    */
   static build(scene, levelKey, groundTopY) {
     const levelDef = scene.cache.json.get(levelDefCacheKey(levelKey));
@@ -92,6 +99,7 @@ export default class LevelLoader {
 
     const cellSize = levelDef.cellSize || CELL_SIZE;
     const tiles = [];
+    const bgTiles = [];
     const entities = [];
     let offsetX = 0;
     let maxRows = 0;
@@ -103,7 +111,7 @@ export default class LevelLoader {
         continue;
       }
 
-      const { cols, rows, grid, entities: sectionEntities = [] } = section;
+      const { cols, rows, grid, bgGrid = [], entities: sectionEntities = [], tileStyles = {} } = section;
       maxRows = Math.max(maxRows, rows);
       const lastRow = groundRow(rows);
 
@@ -117,6 +125,26 @@ export default class LevelLoader {
             w: run.colSpan * cellSize,
             h: cellSize,
             isGroundRow: row === lastRow,
+            style: tileStyles[run.type] || null,
+            // 'ground' or 'hazard' — see tileStyleKind's docs on why the literal
+            // character alone isn't enough once a section defines its own variants.
+            kind: tileStyleKind(run.type, tileStyles),
+          });
+        }
+      });
+
+      // Background layer: same row/col → world-space mapping as the foreground grid, but
+      // no ground-baseline concept and no collision — purely a stacked decorative image.
+      bgGrid.forEach((rowStr, row) => {
+        const y = rowToWorldY(row, rows, groundTopY, cellSize);
+        for (const run of mergeRowRuns(rowStr)) {
+          bgTiles.push({
+            type: run.type,
+            x: colToWorldX(run.startCol, offsetX, cellSize),
+            y,
+            w: run.colSpan * cellSize,
+            h: cellSize,
+            style: tileStyles[run.type] || null,
           });
         }
       });
@@ -151,6 +179,7 @@ export default class LevelLoader {
       levelWidth: offsetX,
       levelHeight: maxRows * cellSize,
       tiles,
+      bgTiles,
       entities,
     };
   }

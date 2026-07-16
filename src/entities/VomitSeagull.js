@@ -137,7 +137,7 @@ export default class VomitSeagull extends Actor {
     g.fillCircle(headX + 4 * this.direction, -6, 2);
 
     // ---- Wings ----
-    // Left wing (upper) – flap angle
+    // Left wing (upper)  flap angle
     const wingAngle = Math.sin(this.wingAngle) * 0.6 + 0.6; // 0 to 1.2 rad
     const wingLength = 28;
     const wingY = -8;
@@ -151,7 +151,7 @@ export default class VomitSeagull extends Actor {
     const y3 = y1 - Math.sin(wingAngle * 0.6) * (wingLength * 0.6) * 0.8;
     g.fillTriangle(x1, y1, x2, y2, x3, y3);
 
-    // Right wing (lower) – opposite flap (mirror)
+    // Right wing (lower)  opposite flap (mirror)
     const wingAngle2 = Math.sin(this.wingAngle + Math.PI) * 0.6 + 0.6;
     const x4 = 0;
     const y4 = wingY + 8;

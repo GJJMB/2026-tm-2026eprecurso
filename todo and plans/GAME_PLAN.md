@@ -94,7 +94,7 @@ to keep that box checked.
   at each state
 
 ### Phase 2 — Level content + goal (target: 3-4h) — DONE
-- [x] Pit gap in the ground (x 900–1050) — falling past `deathY` (viewport height + 150,
+- [x] Pit gap in the ground (x 9001050) — falling past `deathY` (viewport height + 150,
   with physics world bounds extended below the visible area for room to actually fall)
   triggers Game Over. World/camera bound distinction matters here: `collideWorldBounds`
   stayed on as a safety net, but the world was made taller than the camera so the fall is
@@ -112,7 +112,7 @@ to keep that box checked.
   via headless-Chromium with direct state teleportation (`body.reset`) for determinism,
   since blindly holding arrow keys in real time to reach each trigger would have been slow
   and imprecise. One test-coordinate gotcha along the way, not a game bug: the x=1040
-  floating platform's footprint (960–1120) overlaps most of the pit gap (900–1050) by
+  floating platform's footprint (9601120) overlaps most of the pit gap (9001050) by
   design (an elevated alternate path across the pit) — an early test teleport landed on
   its edge instead of falling, which looked like a broken pit until the coordinate was
   moved to x=930, safely inside the open part of the gap.

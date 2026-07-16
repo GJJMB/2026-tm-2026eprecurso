@@ -1,5 +1,6 @@
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
+import PlatformTextures from '../world/PlatformTextures.js';
 import LevelLoader from '../world/LevelLoader.js';
 
 export default class BootScene extends Phaser.Scene {
@@ -12,6 +13,7 @@ export default class BootScene extends Phaser.Scene {
     // can know which audio/image/section files to queue.
     SoundManager.queueManifestLoad(this);
     ParallaxBackground.queueManifestLoad(this);
+    PlatformTextures.queueManifestLoad(this);
     LevelLoader.queueManifestLoad(this);
   }
 

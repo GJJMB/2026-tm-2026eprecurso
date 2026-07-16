@@ -183,11 +183,13 @@
     .cell.ground-row {
       box-shadow: inset 0 -3px 0 rgba(0, 204, 255, 0.35);
     }
-    .cell[data-type="G"] {
-      background: #4a4a5e;
-    }
-    .cell[data-type="H"] {
-      background: #d1495b;
+    /* Fill color is set inline per-cell in JS (main.js's updateCellVisual), since each
+       section can define several Ground/Hazard/Background variants with their own color —
+       a fixed CSS rule per literal character can't represent that. Foreground wins over
+       background when both are painted on the same cell; a background tile hidden behind
+       a painted foreground tile still gets a small corner tick as a reminder it's there. */
+    .cell.has-bg-under-fg {
+      box-shadow: inset -8px -8px 0 -6px rgba(0, 0, 0, 0.55);
     }
     .cell:hover {
       outline: 1px solid #00ccff;
@@ -362,6 +364,34 @@
     .type-toggle button {
       flex: 1;
     }
+    .variant-block {
+      border-top: 1px solid #2c2c3a;
+      padding-top: 10px;
+      margin-top: 10px;
+    }
+    .variant-block:first-child {
+      border-top: none;
+      padding-top: 0;
+      margin-top: 0;
+    }
+    .variant-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .variant-picker .tool-btn {
+      flex: 1 1 45%;
+    }
+    input[type="color"] {
+      width: 100%;
+      height: 32px;
+      box-sizing: border-box;
+      background: #12121a;
+      border: 1px solid #3a3a4a;
+      border-radius: 6px;
+      padding: 2px;
+      margin-top: 6px;
+    }
 
     .waypoint-row {
       display: flex;
@@ -449,32 +479,63 @@
       <button id="new-btn">New blank</button>
     </div>
 
-    <h2>Tiles</h2>
-    <div class="tool-grid">
-      <button class="tool-btn active" data-tool="G"><span class="swatch" style="background:#4a4a5e"></span>Ground</button>
-      <button class="tool-btn" data-tool="H"><span class="swatch" style="background:#d1495b"></span>Hazard</button>
-      <button class="tool-btn" data-tool="."><span class="swatch" style="background:#1d1d2b;border:1px solid #444"></span>Eraser</button>
+    <h2>Layer</h2>
+    <div class="type-toggle" style="margin-bottom: 8px;">
+      <button id="layer-fg-btn" class="primary" data-layer="foreground">Foreground</button>
+      <button id="layer-bg-btn" data-layer="background">Background</button>
     </div>
     <p class="hint">
-      Drag to paint. The highlighted bottom row is the ground baseline every section
-      anchors to.
+      Foreground holds interactable Ground/Hazard tiles and entities — this is what the
+      player collides with. Background holds purely decorative ground-equivalent sprites
+      behind the action; it never collides and can't hold entities.
     </p>
 
-    <h2>Entities</h2>
-    <div class="entity-tabs">
-      <button class="tool-btn entity-tab" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
-      <button class="tool-btn entity-tab" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span>Goal</button>
-      <button class="tool-btn entity-tab" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span>Moving</button>
-      <button class="tool-btn entity-tab" data-tool="enemyFalseFriend"><span class="swatch" style="background:#ff8800"></span>False Friend</button>
-      <button class="tool-btn entity-tab" data-tool="enemyCrawler"><span class="swatch" style="background:#44aa44"></span>Crawler</button>
-      <button class="tool-btn entity-tab" data-tool="enemyVomitSeagull"><span class="swatch" style="background:#ffcc00"></span>Seagull</button>
+    <h2>Tiles</h2>
+    <div id="fg-tools">
+      <div class="tool-grid" id="fg-tool-grid"></div>
+      <p class="hint">
+        Drag to paint. The highlighted bottom row is the ground baseline every section
+        anchors to. Each brush below is its own sprite/color — add more in the Tileset
+        section to paint several distinct-looking Ground/Hazard tiles in one section.
+      </p>
     </div>
+    <div id="bg-tools" class="hidden">
+      <div class="tool-grid" id="bg-tool-grid"></div>
+      <p class="hint">
+        Drag to paint decorative background tiles. These sit behind everything else and
+        never block or collide with the player.
+      </p>
+    </div>
+
+    <h2>Tileset (this section)</h2>
+    <div id="ground-tileset-field"></div>
+    <div id="hazard-tileset-field"></div>
+    <div id="bg-tileset-field"></div>
     <p class="hint">
-      Click an empty cell to place the selected entity (Spawn/Goal are singletons —
-      placing a new one moves the old; Moving/enemies allow any number). Already-placed
-      entities and platform tiles are listed in the right sidebar — select one there (or
-      click its marker/tile here) to edit its properties.
+      Each Ground/Hazard/Background brush picks a color or stretched sprite texture — "+
+      Add variant" makes a new brush with its own look (e.g. a second Ground sprite) that
+      shows up as its own tool above and in the Type picker on a selected platform below.
+      Each section keeps its own tileset, so different sections can look completely
+      different even reused across levels.
     </p>
+
+    <div id="entities-section">
+      <h2>Entities</h2>
+      <div class="entity-tabs">
+        <button class="tool-btn entity-tab" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
+        <button class="tool-btn entity-tab" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span>Goal</button>
+        <button class="tool-btn entity-tab" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span>Moving</button>
+        <button class="tool-btn entity-tab" data-tool="enemyFalseFriend"><span class="swatch" style="background:#ff8800"></span>False Friend</button>
+        <button class="tool-btn entity-tab" data-tool="enemyCrawler"><span class="swatch" style="background:#44aa44"></span>Crawler</button>
+        <button class="tool-btn entity-tab" data-tool="enemyVomitSeagull"><span class="swatch" style="background:#ffcc00"></span>Seagull</button>
+      </div>
+      <p class="hint">
+        Click an empty cell to place the selected entity (Spawn/Goal are singletons —
+        placing a new one moves the old; Moving/enemies allow any number). Already-placed
+        entities and platform tiles are listed in the right sidebar — select one there (or
+        click its marker/tile here) to edit its properties.
+      </p>
+    </div>
 
     <h2>Section JSON</h2>
     <div class="row">
@@ -543,6 +604,10 @@
     <h2>Platforms</h2>
     <ul id="platform-list" class="obj-list"></ul>
     <p class="hint" id="platform-list-empty">None placed yet — paint Ground/Hazard on the left.</p>
+
+    <h2>Background</h2>
+    <ul id="bg-list" class="obj-list"></ul>
+    <p class="hint" id="bg-list-empty">None placed yet — switch to the Background layer and paint on the left.</p>
 
     <h2>Selected</h2>
     <div id="entity-inspector" class="inspector hidden">
