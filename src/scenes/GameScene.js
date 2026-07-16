@@ -1,4 +1,5 @@
 import Stickman from '../entities/Stickman.js';
+import FalseFriend from '../entities/FalseFriend.js';
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
 import LevelLoader from '../world/LevelLoader.js';
@@ -79,6 +80,7 @@ export default class GameScene extends Phaser.Scene {
 
     this._addGoal(goalPos.x, goalPos.yTop);
 
+    // ---- Sound ----
     this.sfx = new SoundManager(this);
 
     this.player = new Stickman(this, spawn.x, spawn.y);
@@ -86,6 +88,18 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.hazards, () => this._finish(false), undefined, this);
     this.physics.add.overlap(this.player, this.goal, () => this._finish(true), undefined, this);
 
+    // ---- FalseFriend – random spawn, away from the player's actual spawn point ----
+    let spawnX;
+    const minSpawn = 200, maxSpawn = levelWidth - 200;
+    do {
+      spawnX = minSpawn + Math.random() * (maxSpawn - minSpawn);
+    } while (Math.abs(spawnX - spawn.x) < 150);
+    this.falseFriend = new FalseFriend(this, spawnX, groundY - 40);
+    this.physics.add.collider(this.falseFriend, this.platforms);
+    this.physics.add.collider(this.player, this.falseFriend);
+    this.physics.add.overlap(this.player, this.falseFriend, this._handlePlayerEnemyCollision, undefined, this);
+
+    // ---- Camera & controls ----
     this.cameras.main.startFollow(this.player, true, 0.12, 0.12);
     this.cameras.main.setDeadzone(120, 80);
 
@@ -94,6 +108,7 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard.on('keydown-ESC', () => this._togglePause());
     this.events.once('shutdown', hidePauseMenu);
 
+    // ---- HUD ----
     this.add
       .text(width / 2, 16, t('game.instructions'), {
         fontSize: '14px',
@@ -110,6 +125,21 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(10);
   }
 
+  _handlePlayerEnemyCollision(player, enemy) {
+    if (!enemy.alive) return;
+    const playerBottom = player.y;
+    const enemyTop = enemy.y - 40;
+    if (player.body.velocity.y > 0 && playerBottom < enemyTop + 10) {
+      // Stomp → kill enemy
+      enemy.takeDamage();
+      player.body.setVelocityY(-300);
+      this.sfx.play('jump');
+    } else {
+      this._finish(false);
+    }
+  }
+
+  // ---- helpers ----
   _addPlatform(x, y, w, h, color) {
     const rect = this.add.rectangle(x, y, w, h, color);
     this.physics.add.existing(rect, true);
@@ -159,21 +189,19 @@ export default class GameScene extends Phaser.Scene {
   _addGoal(x, groundTopY) {
     const poleHeight = 70;
     const container = this.add.container(x, groundTopY);
-
     const pole = this.add.rectangle(0, -poleHeight / 2, 4, poleHeight, GOAL_POLE_COLOR);
     const flag = this.add.triangle(0, -poleHeight + 16, 0, -12, 24, -4, 0, 4, GOAL_FLAG_COLOR);
     container.add([pole, flag]);
-
     this.physics.add.existing(container);
     container.body.setAllowGravity(false);
     container.body.setImmovable(true);
     container.body.setSize(30, poleHeight);
     container.body.setOffset(-15, -poleHeight);
-
     this.goal = container;
     return container;
   }
 
+  // ---- pause ----
   _togglePause() {
     if (this.finished) return;
     if (this.paused) this._resume();
@@ -181,9 +209,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _pause() {
-    // Freeze physics instead of this.scene.pause(): a full scene pause also
-    // suspends this scene's own Input Plugin, which would stop the keydown-ESC
-    // listener below from ever firing again to close the menu.
     this.paused = true;
     this.physics.pause();
     showPauseMenu({
@@ -197,7 +222,6 @@ export default class GameScene extends Phaser.Scene {
     this.paused = false;
     this.physics.resume();
     hidePauseMenu();
-    // Drop any key state latched while paused so it can't fire an action (e.g. a jump) on resume.
     this.input.keyboard.resetKeys();
   }
 
@@ -210,11 +234,13 @@ export default class GameScene extends Phaser.Scene {
     this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel });
   }
 
+  // ---- update ----
   update(time, delta) {
     if (this.finished || this.paused) return;
 
     this.parallax.update(this.cameras.main.scrollX);
 
+    // moving platforms
     for (const platform of this.movingPlatforms) {
       const patrol = platform._patrol;
       const targetIdx = patrol.direction === 1 ? patrol.segmentIndex + 1 : patrol.segmentIndex;
@@ -237,24 +263,30 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
+    // player
     const left = this.cursors.left.isDown || this.keys.A.isDown;
     const right = this.cursors.right.isDown || this.keys.D.isDown;
-    const jumpPressed =
-      Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
-
+    const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
     let dir = 0;
     if (left && !right) dir = -1;
     else if (right && !left) dir = 1;
 
     this.player.setMove(dir);
-    if (jumpPressed && this.player.jump()) this.sfx.play('jump');
+    if (jump && this.player.jump()) this.sfx.play('jump');
     this.player.update(time, delta);
 
+    // enemy
+    if (this.falseFriend.alive) {
+      this.falseFriend.update(time, delta, this.player);
+    }
+
+    // death
     if (this.player.y > this.deathY) {
       this._finish(false);
       return;
     }
 
+    // HUD
     this.elapsedMs += delta;
     this.hudText.setText(`${this.hudLabel}: ${(this.elapsedMs / 1000).toFixed(1)}s`);
   }
