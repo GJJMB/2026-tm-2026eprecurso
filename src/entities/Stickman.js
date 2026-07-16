@@ -50,7 +50,9 @@ export default class Stickman extends Phaser.GameObjects.Container {
     this.facing = 1;
     this.gaitPhase = 0;
     this.idlePhase = 0;
-    this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0 };
+
+    this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0, lean: 0 };
+    this.poseVel = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0, lean: 0 };
 
     // --- Lean (inertia) ---
     this.lean = 0;
@@ -75,16 +77,18 @@ export default class Stickman extends Phaser.GameObjects.Container {
     }
   }
 
+  /** Returns true if a jump was actually triggered (i.e. was grounded), false otherwise. */
   jump() {
     if (this.grounded) {
       this.body.setVelocityY(JUMP_VELOCITY);
+      return true;
     }
+    return false;
   }
 
   update(time, delta) {
-    const dt = delta / 1000;
-    const speed = this.body.velocity.x;
-    const absSpeed = Math.abs(speed);
+    const dt = Math.min(delta / 1000, 1 / 30);
+    const absSpeed = Math.abs(this.body.velocity.x);
 
     // --- Detect landing ---
     const isGrounded = this.grounded;
@@ -118,44 +122,45 @@ export default class Stickman extends Phaser.GameObjects.Container {
 
   _updateAirbornePose() {
     const rising = this.body.velocity.y < 0;
-    const legTarget = rising ? Phaser.Math.DegToRad(-30) : Phaser.Math.DegToRad(20);
-    const armTarget = rising ? Phaser.Math.DegToRad(20) : Phaser.Math.DegToRad(-10);
+    const leg = rising ? Phaser.Math.DegToRad(-30) : Phaser.Math.DegToRad(20);
+    const arm = rising ? Phaser.Math.DegToRad(20) : Phaser.Math.DegToRad(-10);
 
-    this.pose.leftLeg = Phaser.Math.Linear(this.pose.leftLeg, legTarget, 0.25);
-    this.pose.rightLeg = Phaser.Math.Linear(this.pose.rightLeg, -legTarget, 0.25);
-    this.pose.leftArm = Phaser.Math.Linear(this.pose.leftArm, armTarget, 0.25);
-    this.pose.rightArm = Phaser.Math.Linear(this.pose.rightArm, -armTarget, 0.25);
-    this.pose.bob = 0;
     this.gaitPhase = 0;
+    return { leftLeg: leg, rightLeg: -leg, leftArm: arm, rightArm: -arm, bob: 0 };
   }
 
-  _updateRunPose(dt, absSpeed) {
+  _runTargets(dt, absSpeed) {
     const cycleRate = 2 + (absSpeed / GAIT_SPEED_FOR_FULL_CYCLE) * 6;
     this.gaitPhase += dt * cycleRate;
 
     const swing = Math.sin(this.gaitPhase);
-    this.pose.leftLeg = swing * MAX_LEG_SWING;
-    this.pose.rightLeg = -swing * MAX_LEG_SWING;
-    this.pose.leftArm = -swing * MAX_ARM_SWING;
-    this.pose.rightArm = swing * MAX_ARM_SWING;
-    this.pose.bob = Math.abs(swing) * 2;
+    return {
+      leftLeg: swing * MAX_LEG_SWING,
+      rightLeg: -swing * MAX_LEG_SWING,
+      leftArm: -swing * MAX_ARM_SWING,
+      rightArm: swing * MAX_ARM_SWING,
+      bob: Math.abs(swing) * 2,
+    };
   }
 
-  _updateIdlePose(dt) {
+  _idleTargets(dt) {
     this.gaitPhase = 0;
     this.idlePhase += dt * 1.6;
     const sway = Math.sin(this.idlePhase) * IDLE_SWAY;
 
-    this.pose.leftLeg = Phaser.Math.Linear(this.pose.leftLeg, IDLE_LEG_STANCE, 0.2);
-    this.pose.rightLeg = Phaser.Math.Linear(this.pose.rightLeg, -IDLE_LEG_STANCE, 0.2);
-    this.pose.leftArm = IDLE_ARM_STANCE + sway;
-    this.pose.rightArm = -IDLE_ARM_STANCE - sway;
-    this.pose.bob = Math.sin(this.idlePhase) * 1;
+    return {
+      leftLeg: IDLE_LEG_STANCE,
+      rightLeg: -IDLE_LEG_STANCE,
+      leftArm: IDLE_ARM_STANCE + sway,
+      rightArm: -IDLE_ARM_STANCE - sway,
+      bob: Math.sin(this.idlePhase) * 1,
+    };
   }
 
   draw() {
     const g = this.gfx;
     g.clear();
+    g.rotation = this.pose.lean;
 
     // --- Hit intensity for squash ---
     let hitIntensity = 0;

@@ -27,14 +27,14 @@ to keep that box checked.
 
 ## Mandatory requirements this MVP must hit (from the spec)
 
-- [ ] Player controlled by keyboard, clear movement (run + jump)
-- [ ] Game elements that react to time/input (moving platforms or hazards)
-- [ ] Collisions via Arcade `overlap`/`collider`
-- [ ] Visible game state (lives or timer or checkpoint progress)
-- [ ] Game Over and/or Victory condition, with reset (press R / button)
-- [ ] At least 1 integrated sound
-- [ ] ≥ 2 languages (PT + EN) with an accessible selector, no duplicated UI strings in code
-- [ ] Reasonable asset sizes (compressed audio, proportional sprites, no unused assets)
+- [x] Player controlled by keyboard, clear movement (run + jump)
+- [x] Game elements that react to time/input (moving platform + spike hazard + pit)
+- [x] Collisions via Arcade `overlap`/`collider`
+- [x] Visible game state (HUD elapsed-time counter)
+- [x] Game Over and/or Victory condition, with reset (press R / button)
+- [x] At least 1 integrated sound (jump, win, lose — three OGG clips via SoundManager)
+- [x] ≥ 2 languages (PT + EN) with an accessible selector, no duplicated UI strings in code
+- [x] Reasonable asset sizes (3 OGG clips, ~4KB each; no images yet; nothing unused)
 - [ ] Runs from a local HTTP server (Live Server / `npx serve` / `npm start`)
 - [ ] Repo at root, `.gitignore`, README, tag `1.0`
 
@@ -55,15 +55,21 @@ to keep that box checked.
 │   │   └── pt.json
 │   ├── entities/
 │   │   └── Stickman.js       # procedurally-posed physics player (Container + Graphics)
+│   ├── audio/
+│   │   └── SoundManager.js   # event-name -> sound-file system, driven by the JSON below
 │   └── scenes/
-│       ├── BootScene.js      # minimal loader for preload assets
-│       ├── PreloadScene.js   # loads all game assets + shows progress bar
+│       ├── BootScene.js      # fetches sound-events.json, then hands off to PreloadScene
+│       ├── PreloadScene.js   # queues audio + locale loads from the manifest, shows progress
 │       ├── MenuScene.js      # title, language selector, start button
 │       ├── GameScene.js      # the platformer level
 │       └── GameOverScene.js  # win/lose screen, retry, back to menu
 └── assets/
     ├── images/               # platform tiles/textures, goal flag, background (no player spritesheet)
-    ├── audio/                # jump.ogg, win.ogg/mp3, (optional bg music)
+    ├── audio/
+    │   ├── sound-events.json # { "eventName": "file.ogg" } — edit this to add/remap sounds
+    │   ├── jump.ogg           # ~4KB, self-synthesized (ffmpeg sine sweep), no licensing concerns
+    │   ├── win.ogg
+    │   └── lose.ogg
     └── fonts/                # optional
 ```
 
@@ -87,20 +93,56 @@ to keep that box checked.
   scissor-legs jump pose rising vs falling) — verified visually via headless-Chromium screenshots
   at each state
 
-### Phase 2 — Level content + goal (target: 3-4h)
-- One hazard/obstacle type that reacts to time or input (e.g. moving platform via tween, or a
-  spike/pit that triggers Game Over on `overlap`)
-- End-of-level goal object; reaching it via `overlap` triggers Victory
-- Falling off the world / touching hazard triggers Game Over
-- Visible game state: simple HUD (timer counting up, or lives counter, or checkpoint text)
-- Reset: pressing R (or a button in GameOverScene) restarts GameScene cleanly
+### Phase 2 — Level content + goal (target: 3-4h) — DONE
+- [x] Pit gap in the ground (x 900–1050) — falling past `deathY` (viewport height + 150,
+  with physics world bounds extended below the visible area for room to actually fall)
+  triggers Game Over. World/camera bound distinction matters here: `collideWorldBounds`
+  stayed on as a safety net, but the world was made taller than the camera so the fall is
+  visible before the death check fires.
+- [x] Moving platform (`_addMovingPlatform`, vertical patrol) — a real Arcade `velocity`-driven
+  patrol, not a manually-set position each frame, so Arcade's own collision separation
+  carries a rider for free (confirmed: player Y tracked platform Y with a stable ~12px
+  offset while `touching.down` stayed true)
+- [x] Static spike hazard — `overlap` with the player triggers Game Over
+- [x] Goal flag (pole + triangle, `Container` + Arcade body) at the end of the level —
+  `overlap` triggers Victory
+- [x] HUD: elapsed-time counter, top-left, pauses once the run ends
+- [x] Reset: `GameOverScene` R now restarts `GameScene` directly (not via MenuScene)
+- All four end states (goal win, hazard lose, pit-fall lose, moving-platform ride) verified
+  via headless-Chromium with direct state teleportation (`body.reset`) for determinism,
+  since blindly holding arrow keys in real time to reach each trigger would have been slow
+  and imprecise. One test-coordinate gotcha along the way, not a game bug: the x=1040
+  floating platform's footprint (960–1120) overlaps most of the pit gap (900–1050) by
+  design (an elevated alternate path across the pit) — an early test teleport landed on
+  its edge instead of falling, which looked like a broken pit until the coordinate was
+  moved to x=930, safely inside the open part of the gap.
 
-### Phase 3 — Audio + i18n (target: 2-3h — do NOT skip, both are hard requirements)
-- Add jump sound + one more (win/death) — compress to OGG/MP3, keep files small
-- `src/i18n.js`: loads `en.json`/`pt.json`, `t(key)` lookup, `setLang()` swaps text live
-- All UI strings (menu title, buttons, HUD labels, game over/win text) pulled from locale files —
-  zero hardcoded UI strings in scene code
-- Language selector in MenuScene (two buttons/flags), persists selection (localStorage is fine)
+### Phase 3 — Audio + i18n (target: 2-3h — do NOT skip, both are hard requirements) — DONE
+- [x] Sound-event system (`src/audio/SoundManager.js` + `assets/audio/sound-events.json`):
+  the JSON maps `{ "eventName": "file.ogg" }`; `SoundManager.queueManifestLoad` (BootScene)
+  fetches the JSON itself, `SoundManager.queueSoundLoads` (PreloadScene) reads it from cache
+  and queues every file it lists under its event name, and `new SoundManager(scene).play(
+  eventName)` plays it. Adding a new sound is a JSON edit + a file drop — no code change.
+  Three self-synthesized OGG clips (`jump`, `win`, `lose`, ffmpeg sine/chirp tones, ~4KB
+  each) wired to the jump action and the win/lose transition in `GameScene`.
+- [x] `src/i18n.js`: `queueLocaleLoads`/`initLocales` load `src/locales/{en,pt}.json` into
+  memory, `t(key)` looks up the current language (falls back to the key itself),
+  `setLanguage()` persists to `localStorage`
+- [x] All UI strings (menu title/start prompt, language label, game instructions, HUD
+  "Time"/"Tempo" label, game over win/lose/restart text) pulled from locale files — zero
+  hardcoded UI strings left in scene code
+- [x] Language selector in MenuScene: EN/PT buttons, active language highlighted, click
+  calls `setLanguage` + `scene.restart()` to re-render all text; selection persists across
+  a reload via `localStorage`
+- Verified via headless Chromium: both locale JSON files and all three audio files load
+  into cache without errors, clicking PT re-renders the whole menu correctly (incl.
+  accented characters), the language choice carries into GameScene's HUD/instructions and
+  into the win/lose screen, and the `jump`/`win`/`lose` sound *events* actually fire
+  (confirmed via a `scene.sound.on('play', ...)` listener — polling `sound.sounds.length`
+  after the fact reads 0 because Phaser auto-cleans up short one-shot sounds once they
+  finish playing, which looked like a bug until switched to an event listener). Actually
+  judging whether the three clips *sound* right is left to a human ear, not headless
+  screenshots — files are at `assets/audio/{jump,win,lose}.ogg`.
 
 ### Phase 4 — Polish pass / rubric coverage (target: 2-3h, cut first if time is short)
 - MenuScene and GameOverScene should look intentional, not placeholder rectangles
