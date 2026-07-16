@@ -16,6 +16,15 @@ Matter.js ragdoll physics. Arcade is what's taught in class, what the rubric exp
 "Physics-based stickman" here means gravity/jump/collision feel, not a jointed ragdoll. If there's
 time left after MVP + polish, a ragdoll death animation (Matter.js) is a fun stretch goal — not before.
 
+**Player rendering decision (Phase 1):** the stickman is a `Phaser.GameObjects.Container` that
+carries the Arcade body directly (no spritesheet). Its pose is redrawn every frame from a single
+`Graphics` child using forward-kinematics-style limb angles pivoting from shoulder/hip points —
+running/jumping/idle are computed poses, not pre-drawn frames. See
+[../src/entities/Stickman.js](../src/entities/Stickman.js). Trade-off: this doesn't produce a
+texture-based "sprite" for the player, which the rubric's "sprites e imagens" line technically
+expects — worth having at least one texture-based image element elsewhere (background, goal flag)
+to keep that box checked.
+
 ## Mandatory requirements this MVP must hit (from the spec)
 
 - [ ] Player controlled by keyboard, clear movement (run + jump)
@@ -44,6 +53,8 @@ time left after MVP + polish, a ragdoll death animation (Matter.js) is a fun str
 │   ├── locales/
 │   │   ├── en.json
 │   │   └── pt.json
+│   ├── entities/
+│   │   └── Stickman.js       # procedurally-posed physics player (Container + Graphics)
 │   └── scenes/
 │       ├── BootScene.js      # minimal loader for preload assets
 │       ├── PreloadScene.js   # loads all game assets + shows progress bar
@@ -51,7 +62,7 @@ time left after MVP + polish, a ragdoll death animation (Matter.js) is a fun str
 │       ├── GameScene.js      # the platformer level
 │       └── GameOverScene.js  # win/lose screen, retry, back to menu
 └── assets/
-    ├── images/               # stickman spritesheet, platform tiles, goal flag, background
+    ├── images/               # platform tiles/textures, goal flag, background (no player spritesheet)
     ├── audio/                # jump.ogg, win.ogg/mp3, (optional bg music)
     └── fonts/                # optional
 ```
@@ -65,12 +76,16 @@ time left after MVP + polish, a ragdoll death animation (Matter.js) is a fun str
 - Confirm it runs via `npx serve` / `live-server` in a real browser before writing any gameplay
 - Git init, first commit
 
-### Phase 1 — Core platforming (target: 4-5h)
-- Stickman as an Arcade Physics sprite: gravity, left/right movement, jump (only when grounded)
-- Static platform group, `collider(player, platforms)`
-- Tilemap-free approach is fine: hand-placed platform sprites is enough for MVP
-- Camera follows player, world bounds set beyond screen width
-- Basic animation states (idle/run/jump) — even 2-3 frames each is enough
+### Phase 1 — Core platforming (target: 4-5h) — DONE
+- [x] Stickman (`src/entities/Stickman.js`): a `Container` carrying the Arcade body directly
+  (gravity, `setAccelerationX`/drag for run, `setVelocityY` for jump only when grounded)
+- [x] Static platforms (plain rectangles + `physics.add.existing(rect, true)`),
+  `collider(player, platforms)`
+- [x] Camera follows player (`startFollow` + deadzone), world bounds wider than one screen
+- [x] Pose is **procedural, not spritesheet frames**: a `Graphics` child is redrawn every frame
+  from limb angles computed from movement state (idle sway, run gait cycle scaled to speed,
+  scissor-legs jump pose rising vs falling) — verified visually via headless-Chromium screenshots
+  at each state
 
 ### Phase 2 — Level content + goal (target: 3-4h)
 - One hazard/obstacle type that reacts to time or input (e.g. moving platform via tween, or a
