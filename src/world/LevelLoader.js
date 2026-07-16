@@ -66,6 +66,15 @@ export default class LevelLoader {
     }
   }
 
+  /** The level id that follows `levelKey` in assets/levels/levels.json's sequence, or null if
+   * `levelKey` is last (or not found). Used to offer a "Next Level" action on a win. */
+  static getNextLevelKey(scene, levelKey) {
+    const sequence = scene.cache.json.get(LEVELS_SEQUENCE_KEY) || [];
+    const idx = sequence.indexOf(levelKey);
+    if (idx === -1 || idx === sequence.length - 1) return null;
+    return sequence[idx + 1];
+  }
+
   /**
    * Assemble `levelKey`'s (already-preloaded) sections into world-space geometry.
    * `groundTopY` anchors every section's ground row to the same baseline, so sections

@@ -9,5 +9,6 @@
   "pause.leave": "Leave",
   "gameover.win": "You Win!",
   "gameover.lose": "Game Over",
-  "gameover.restart": "Press R to restart"
+  "gameover.restart": "Press R to restart",
+  "gameover.next": "Next Level"
 }

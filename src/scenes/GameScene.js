@@ -33,6 +33,7 @@ export default class GameScene extends Phaser.Scene {
     // world-space tiles/entities, anchored so every section's ground row lands on
     // groundTopY regardless of screen height.
     const levelKey = (data && data.level) || DEFAULT_LEVEL_KEY;
+    this.levelKey = levelKey;
     const plan = LevelLoader.build(this, levelKey, groundTopY);
     const levelWidth = Math.max(plan.levelWidth, width);
 
@@ -205,7 +206,8 @@ export default class GameScene extends Phaser.Scene {
     this.finished = true;
     this.player.setMove(0);
     this.sfx.play(won ? 'win' : 'lose');
-    this.scene.start('GameOverScene', { won });
+    const nextLevel = won ? LevelLoader.getNextLevelKey(this, this.levelKey) : null;
+    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel });
   }
 
   update(time, delta) {
