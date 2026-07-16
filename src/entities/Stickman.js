@@ -51,8 +51,7 @@ export default class Stickman extends Phaser.GameObjects.Container {
     this.gaitPhase = 0;
     this.idlePhase = 0;
 
-    this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0, lean: 0 };
-    this.poseVel = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0, lean: 0 };
+    this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0 };
 
     // --- Lean (inertia) ---
     this.lean = 0;
@@ -104,18 +103,20 @@ export default class Stickman extends Phaser.GameObjects.Container {
     }
 
     // --- Compute target lean based on velocity (inertia) ---
-    const targetLean = Phaser.Math.Clamp(speed / MAX_SPEED_X, -1, 1) * MAX_LEAN_ANGLE;
+    const targetLean = Phaser.Math.Clamp(this.body.velocity.x / MAX_SPEED_X, -1, 1) * MAX_LEAN_ANGLE;
     // Smoothly interpolate lean
     this.lean += (targetLean - this.lean) * (1 - Math.exp(-LEAN_SMOOTHNESS * dt));
 
     // --- Update pose ---
+    let targets;
     if (!this.grounded) {
-      this._updateAirbornePose();
+      targets = this._updateAirbornePose();
     } else if (absSpeed > 8) {
-      this._updateRunPose(dt, absSpeed);
+      targets = this._runTargets(dt, absSpeed);
     } else {
-      this._updateIdlePose(dt);
+      targets = this._idleTargets(dt);
     }
+    Object.assign(this.pose, targets);
 
     this.draw();
   }
@@ -160,7 +161,6 @@ export default class Stickman extends Phaser.GameObjects.Container {
   draw() {
     const g = this.gfx;
     g.clear();
-    g.rotation = this.pose.lean;
 
     // --- Hit intensity for squash ---
     let hitIntensity = 0;
