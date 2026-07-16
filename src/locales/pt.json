@@ -9,5 +9,6 @@
   "pause.leave": "Sair",
   "gameover.win": "Ganhaste!",
   "gameover.lose": "Fim de Jogo",
-  "gameover.restart": "Prima R para reiniciar"
+  "gameover.restart": "Prima R para reiniciar",
+  "gameover.next": "Próximo Nível"
 }

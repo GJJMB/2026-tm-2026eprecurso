@@ -1,3 +1,5 @@
+import Actor from './Actor.js';
+
 const LIMB_COLOR = 0x1a1a2a;        // dark base
 const GLOW_COLOR = 0x00ccff;        // neon cyan glow
 const LIMB_WIDTH = 3;
@@ -32,20 +34,15 @@ const LEAN_SMOOTHNESS = 6.0;                      // per second
 const HIT_DURATION = 0.2;
 const SQUASH_FACTOR = 0.2;
 
-export default class Stickman extends Phaser.GameObjects.Container {
+export default class Stickman extends Actor {
   constructor(scene, x, y) {
     super(scene, x, y);
-    scene.add.existing(this);
-    scene.physics.add.existing(this);
 
     this.body.setSize(24, 60);
     this.body.setOffset(-12, -60);
     this.body.setCollideWorldBounds(true);
     this.body.setMaxVelocity(MAX_SPEED_X, MAX_SPEED_Y);
     this.body.setDragX(DRAG_X);
-
-    this.gfx = scene.add.graphics();
-    this.add(this.gfx);
 
     this.facing = 1;
     this.gaitPhase = 0;

@@ -1,0 +1,10 @@
+{
+  "id": "level2",
+  "parallax": "level1",
+  "cellSize": 40,
+  "sections": [
+      "intro",
+      "cannonlmao",
+      "finale"
+  ]
+}
