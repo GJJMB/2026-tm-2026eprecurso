@@ -15,8 +15,6 @@ const GOAL_FLAG_COLOR = 0xffcc33;
 
 const DEFAULT_LEVEL_KEY = 'level1';
 const DEFAULT_MOVING_PLATFORM_WIDTH_CELLS = 3;
-const DEFAULT_MOVING_PLATFORM_RANGE = 80;
-const DEFAULT_MOVING_PLATFORM_SPEED = 70;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -74,11 +72,7 @@ export default class GameScene extends Phaser.Scene {
         goalPos = { x: entity.x, yTop: entity.yTop };
       } else if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
         const w = (entity.widthCells || DEFAULT_MOVING_PLATFORM_WIDTH_CELLS) * plan.cellSize;
-        this._addMovingPlatform(entity.x, entity.y, w, plan.cellSize, MOVING_PLATFORM_COLOR, {
-          axis: entity.axis || 'y',
-          range: entity.range || DEFAULT_MOVING_PLATFORM_RANGE,
-          speed: entity.speed || DEFAULT_MOVING_PLATFORM_SPEED,
-        });
+        this._addMovingPlatform(entity.waypoints, w, plan.cellSize, MOVING_PLATFORM_COLOR, entity.speeds);
       }
     }
 
@@ -122,18 +116,36 @@ export default class GameScene extends Phaser.Scene {
     return rect;
   }
 
-  _addMovingPlatform(x, y, w, h, color, { axis, range, speed }) {
-    const rect = this.add.rectangle(x, y, w, h, color);
+  /**
+   * `waypoints` is a world-space {x,y}[] path (>=2 points); `speeds[i]` is the px/s used
+   * while traversing the segment between waypoints[i] and waypoints[i+1]. The platform
+   * ping-pongs along the path: forward to the last waypoint, then back to the first.
+   */
+  _addMovingPlatform(waypoints, w, h, color, speeds) {
+    const start = waypoints[0];
+    const rect = this.add.rectangle(start.x, start.y, w, h, color);
     this.physics.add.existing(rect);
     rect.body.setAllowGravity(false);
     rect.body.setImmovable(true);
-    rect.body.velocity[axis] = speed;
-    // Simple patrol: real Arcade velocity (not a manually-set position) is what lets
-    // collision separation carry a rider along with the platform for free.
-    rect._patrol = { axis, origin: axis === 'x' ? x : y, range, speed };
+    // Constant Arcade velocity per segment (not a manually-set position) is what lets
+    // collision separation carry a rider along for free; position is only snapped
+    // exactly on waypoint arrival, to stop small per-frame overshoot from drifting.
+    rect._patrol = { waypoints, speeds, segmentIndex: 0, direction: 1 };
+    this._applyPatrolVelocity(rect);
     this.platforms.push(rect);
     this.movingPlatforms.push(rect);
     return rect;
+  }
+
+  _applyPatrolVelocity(platform) {
+    const { waypoints, speeds, segmentIndex, direction } = platform._patrol;
+    const from = direction === 1 ? waypoints[segmentIndex] : waypoints[segmentIndex + 1];
+    const to = direction === 1 ? waypoints[segmentIndex + 1] : waypoints[segmentIndex];
+    const speed = speeds[segmentIndex];
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    platform.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
   }
 
   _addHazard(x, y, w, h, color) {
@@ -202,10 +214,25 @@ export default class GameScene extends Phaser.Scene {
     this.parallax.update(this.cameras.main.scrollX);
 
     for (const platform of this.movingPlatforms) {
-      const { axis, origin, range, speed } = platform._patrol;
-      const pos = platform[axis];
-      if (pos > origin + range) platform.body.velocity[axis] = -Math.abs(speed);
-      else if (pos < origin - range) platform.body.velocity[axis] = Math.abs(speed);
+      const patrol = platform._patrol;
+      const targetIdx = patrol.direction === 1 ? patrol.segmentIndex + 1 : patrol.segmentIndex;
+      const target = patrol.waypoints[targetIdx];
+      // Dot product of "vector to target" and current velocity flips sign exactly when
+      // the platform reaches/passes the target, regardless of speed or frame timing —
+      // more robust than a fixed distance epsilon at variable delta.
+      const dot = (target.x - platform.x) * platform.body.velocity.x + (target.y - platform.y) * platform.body.velocity.y;
+      if (dot <= 0) {
+        platform.body.reset(target.x, target.y);
+        if (patrol.direction === 1) {
+          if (patrol.segmentIndex >= patrol.waypoints.length - 2) patrol.direction = -1;
+          else patrol.segmentIndex += 1;
+        } else if (patrol.segmentIndex <= 0) {
+          patrol.direction = 1;
+        } else {
+          patrol.segmentIndex -= 1;
+        }
+        this._applyPatrolVelocity(platform);
+      }
     }
 
     const left = this.cursors.left.isDown || this.keys.A.isDown;

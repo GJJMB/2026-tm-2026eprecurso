@@ -1,5 +1,5 @@
 {
-  "id": "moving-platform",
+  "id": "test section",
   "cols": 20,
   "rows": 12,
   "grid": [
@@ -19,12 +19,35 @@
   "entities": [
     {
       "type": "movingPlatform",
-      "widthCells": 4,
+      "widthCells": 3,
       "waypoints": [
-        { "col": 9, "row": 8 },
-        { "col": 9, "row": 4 }
+        {
+          "col": 2,
+          "row": 1
+        },
+        {
+          "col": 3,
+          "row": 8
+        },
+        {
+          "col": 16,
+          "row": 10
+        }
       ],
-      "speeds": [70]
+      "speeds": [
+        120,
+        7050
+      ]
+    },
+    {
+      "type": "playerSpawn",
+      "col": 2,
+      "row": 0
+    },
+    {
+      "type": "goal",
+      "col": 18,
+      "row": 10
     }
   ]
 }

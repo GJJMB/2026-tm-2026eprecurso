@@ -1,12 +1,4 @@
-{
-  "level1": {
-    "parallax": "level1",
-    "cellSize": 40,
-    "sections": [
-      "intro",
-      "gap-and-platforms",
-      "moving-platform",
-      "finale"
-    ]
-  }
-}
+[
+  "level1",
+  "level2"
+]

@@ -1,35 +1,60 @@
-import { CELL_SIZE, mergeRowRuns, rowToWorldY, colToWorldX, groundRow } from './levelFormat.js';
+import { CELL_SIZE, ENTITY_TYPES, mergeRowRuns, rowToWorldY, colToWorldX, groundRow } from './levelFormat.js';
 
-const LEVELS_MANIFEST_KEY = 'levels';
-const LEVELS_MANIFEST_PATH = 'assets/levels/levels.json';
+const LEVELS_SEQUENCE_KEY = 'levels';
+const LEVELS_SEQUENCE_PATH = 'assets/levels/levels.json';
+const LEVEL_DEFS_BASE_PATH = 'assets/levels/levels/';
 const SECTIONS_BASE_PATH = 'assets/levels/sections/';
+
+function levelDefCacheKey(id) {
+  return `levelDef:${id}`;
+}
 
 function sectionCacheKey(id) {
   return `section:${id}`;
 }
 
 /**
- * Assembles a level (assets/levels/levels.json) from its pre-made sections
- * (assets/levels/sections/*.json), strung together left-to-right. Adding a level is a
- * manifest edit + section JSON files (hand-written or exported from the grid editor,
- * see editor.html) — no code change.
+ * Assembles a level from its own definition file (assets/levels/levels/<id>.json — hand-written
+ * or exported from the grid editor, see editor.html) plus that definition's pre-made sections
+ * (assets/levels/sections/*.json), strung together left-to-right. assets/levels/levels.json holds
+ * only the ordered list of level ids to play, not level content, so it stays readable as levels
+ * are added. Adding a level is a sequence-array edit + a definition file + section files — no
+ * code change.
  */
 export default class LevelLoader {
-  /** Call from an early scene's preload() to fetch the manifest itself. */
+  /** Call from an early scene's preload() to fetch the level sequence itself. */
   static queueManifestLoad(scene) {
-    scene.load.json(LEVELS_MANIFEST_KEY, LEVELS_MANIFEST_PATH);
+    scene.load.json(LEVELS_SEQUENCE_KEY, LEVELS_SEQUENCE_PATH);
   }
 
   /**
-   * Call from a later scene's preload() (after the manifest has finished loading) to
-   * queue every section referenced by `levelKey`, or by every level if omitted.
+   * Call from that same scene's create() (after the sequence has finished loading) to queue
+   * every level's definition file, or just `levelKey`'s if given. This load pass must finish
+   * before queueSectionLoads runs, since that reads section ids out of these definitions.
+   */
+  static queueLevelDefLoads(scene, levelKey) {
+    const sequence = scene.cache.json.get(LEVELS_SEQUENCE_KEY) || [];
+    const levelKeys = levelKey ? [levelKey] : sequence;
+    for (const id of levelKeys) {
+      const key = levelDefCacheKey(id);
+      if (!scene.cache.json.has(key)) {
+        scene.load.json(key, `${LEVEL_DEFS_BASE_PATH}${id}.json`);
+      }
+    }
+  }
+
+  /**
+   * Call from a later scene's preload() (after queueLevelDefLoads' pass has finished) to
+   * queue every section referenced by `levelKey`'s definition, or by every sequenced level's
+   * definition if omitted.
    */
   static queueSectionLoads(scene, levelKey) {
-    const levels = scene.cache.json.get(LEVELS_MANIFEST_KEY) || {};
-    const levelKeys = levelKey ? [levelKey] : Object.keys(levels);
+    const sequence = scene.cache.json.get(LEVELS_SEQUENCE_KEY) || [];
+    const levelKeys = levelKey ? [levelKey] : sequence;
     const sectionIds = new Set();
     for (const lk of levelKeys) {
-      for (const sectionId of (levels[lk] && levels[lk].sections) || []) {
+      const def = scene.cache.json.get(levelDefCacheKey(lk));
+      for (const sectionId of (def && def.sections) || []) {
         sectionIds.add(sectionId);
       }
     }
@@ -51,10 +76,9 @@ export default class LevelLoader {
    * actual Phaser game objects (that's the only part that needs physics/collider wiring).
    */
   static build(scene, levelKey, groundTopY) {
-    const levels = scene.cache.json.get(LEVELS_MANIFEST_KEY) || {};
-    const levelDef = levels[levelKey];
+    const levelDef = scene.cache.json.get(levelDefCacheKey(levelKey));
     if (!levelDef) {
-      throw new Error(`LevelLoader: no level "${levelKey}" in ${LEVELS_MANIFEST_PATH}`);
+      throw new Error(`LevelLoader: no level definition loaded for "${levelKey}" (expected ${LEVEL_DEFS_BASE_PATH}${levelKey}.json)`);
     }
 
     const cellSize = levelDef.cellSize || CELL_SIZE;
@@ -89,6 +113,17 @@ export default class LevelLoader {
       });
 
       for (const entity of sectionEntities) {
+        if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
+          // Multi-waypoint path: each {col,row} stop becomes a world-space {x,y} point,
+          // anchored to this section the same way single-position entities are.
+          const waypoints = entity.waypoints.map((wp) => ({
+            x: colToWorldX(wp.col, offsetX, cellSize) + cellSize / 2,
+            y: rowToWorldY(wp.row, rows, groundTopY, cellSize) + cellSize / 2,
+          }));
+          entities.push({ ...entity, waypoints, x: waypoints[0].x, y: waypoints[0].y });
+          continue;
+        }
+
         const yTop = rowToWorldY(entity.row, rows, groundTopY, cellSize);
         entities.push({
           ...entity,

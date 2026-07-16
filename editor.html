@@ -47,6 +47,15 @@
       overflow-y: auto;
     }
 
+    #right-sidebar {
+      width: 280px;
+      flex: none;
+      padding: 16px;
+      background: #191924;
+      border-left: 1px solid #2c2c3a;
+      overflow-y: auto;
+    }
+
     #main {
       flex: 1;
       overflow: auto;
@@ -151,6 +160,12 @@
       gap: 1px;
       background: #2c2c3a;
       user-select: none;
+      position: relative;
+    }
+    #path-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
     }
     .cell {
       width: 28px;
@@ -236,6 +251,172 @@
     .file-btn input[type="file"] {
       display: none;
     }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .entity-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .entity-tabs .tool-btn {
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 10px 4px;
+      font-size: 11px;
+    }
+
+    .inspector {
+      margin-top: 10px;
+      background: #12121a;
+      border: 1px solid #3a3a4a;
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .inspector-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .inspector-header span {
+      font-size: 12px;
+      font-weight: bold;
+      color: #fff;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    button.danger {
+      color: #ff9a9a;
+    }
+    .field-row {
+      margin-bottom: 8px;
+    }
+    .field-row:last-child {
+      margin-bottom: 0;
+    }
+    .field-readonly {
+      font-size: 12px;
+      color: #ccc;
+      background: #1a1a24;
+      border: 1px solid #2c2c3a;
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+    select {
+      width: 100%;
+      box-sizing: border-box;
+      background: #12121a;
+      border: 1px solid #3a3a4a;
+      border-radius: 6px;
+      color: #eee;
+      padding: 6px 8px;
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    .obj-list {
+      list-style: none;
+      margin: 0 0 8px;
+      padding: 0;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+    .obj-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #12121a;
+      border: 1px solid #2c2c3a;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 4px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .obj-item:hover {
+      border-color: #00ccff;
+    }
+    .obj-item.selected {
+      outline: 2px solid #00ccff;
+      background: #1a2530;
+    }
+    .obj-item-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .type-toggle {
+      display: flex;
+      gap: 6px;
+    }
+    .type-toggle button {
+      flex: 1;
+    }
+
+    .waypoint-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #1a1a24;
+      border: 1px solid #2c2c3a;
+      border-radius: 6px;
+      padding: 5px 6px;
+      margin-bottom: 5px;
+      font-size: 11px;
+    }
+    .waypoint-row:last-child {
+      margin-bottom: 0;
+    }
+    .waypoint-row .wp-label {
+      flex: none;
+      width: 46px;
+      color: #999;
+    }
+    .waypoint-row .wp-pos {
+      flex: 1;
+      color: #ddd;
+    }
+    .waypoint-row button {
+      padding: 4px 8px;
+      font-size: 11px;
+    }
+    .waypoint-row button.armed {
+      background: #00ccff;
+      color: #0a0a12;
+    }
+    .segment-speed-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      font-size: 11px;
+    }
+    .segment-speed-row:last-child {
+      margin-bottom: 0;
+    }
+    .segment-speed-row .seg-label {
+      flex: none;
+      width: 60px;
+      color: #999;
+    }
+    .segment-speed-row input {
+      flex: 1;
+    }
+    .placement-hint {
+      font-size: 11px;
+      color: #00ccff;
+      background: #0f2530;
+      border: 1px solid #164a5c;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -264,20 +445,28 @@
       <button id="new-btn">New blank</button>
     </div>
 
-    <h2>Palette</h2>
+    <h2>Tiles</h2>
     <div class="tool-grid">
       <button class="tool-btn active" data-tool="G"><span class="swatch" style="background:#4a4a5e"></span>Ground</button>
       <button class="tool-btn" data-tool="H"><span class="swatch" style="background:#d1495b"></span>Hazard</button>
       <button class="tool-btn" data-tool="."><span class="swatch" style="background:#1d1d2b;border:1px solid #444"></span>Eraser</button>
-      <button class="tool-btn" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
-      <button class="tool-btn" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span>Goal</button>
-      <button class="tool-btn" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span>Moving plat.</button>
     </div>
     <p class="hint">
-      Drag to paint Ground/Hazard/Eraser. Click to place Spawn/Goal (only one each —
-      placing a new one moves the old). Click an empty cell with Moving Platform to add
-      one (prompts for axis/range/speed); click an existing marker to remove it. The
-      highlighted bottom row is the ground baseline every section anchors to.
+      Drag to paint. The highlighted bottom row is the ground baseline every section
+      anchors to.
+    </p>
+
+    <h2>Entities</h2>
+    <div class="entity-tabs">
+      <button class="tool-btn entity-tab" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
+      <button class="tool-btn entity-tab" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span>Goal</button>
+      <button class="tool-btn entity-tab" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span>Moving</button>
+    </div>
+    <p class="hint">
+      Click an empty cell to place the selected entity (Spawn/Goal are singletons —
+      placing a new one moves the old). Already-placed entities and platform tiles are
+      listed in the right sidebar — select one there (or click its marker/tile here) to
+      edit its properties.
     </p>
 
     <h2>Section JSON</h2>
@@ -315,11 +504,12 @@
     </div>
     <ul id="section-list"></ul>
     <div class="row">
-      <button id="export-level-btn" class="primary">Download levels.json</button>
+      <button id="export-level-btn" class="primary">Download level definition JSON</button>
     </div>
     <p class="hint">
-      Drop the section files into assets/levels/sections/ and the levels.json entry into
-      assets/levels/levels.json (merge with any existing levels) to play it in-game.
+      Drop the section files into assets/levels/sections/ and this level's file into
+      assets/levels/levels/ (as &lt;level id&gt;.json). Then add "&lt;level id&gt;" to the
+      sequence array in assets/levels/levels.json (if it isn't there already) to play it in-game.
     </p>
   </div>
 
@@ -334,6 +524,30 @@
         <button id="apply-json-btn">Apply edited JSON above</button>
       </div>
     </div>
+  </div>
+
+  <div id="right-sidebar">
+    <h1>Entities &amp; Platforms</h1>
+
+    <h2>Entities</h2>
+    <ul id="entity-list" class="obj-list"></ul>
+    <p class="hint" id="entity-list-empty">None placed yet — use the Entities tools on the left.</p>
+
+    <h2>Platforms</h2>
+    <ul id="platform-list" class="obj-list"></ul>
+    <p class="hint" id="platform-list-empty">None placed yet — paint Ground/Hazard on the left.</p>
+
+    <h2>Selected</h2>
+    <div id="entity-inspector" class="inspector hidden">
+      <div class="inspector-header">
+        <span id="inspector-title">—</span>
+        <button id="inspector-delete" class="danger">Delete</button>
+      </div>
+      <div id="inspector-fields"></div>
+    </div>
+    <p class="hint" id="inspector-empty-hint">
+      Click an item above (or a marker/tile on the grid) to view and edit its properties.
+    </p>
   </div>
 
   <script type="module" src="src/editor/main.js"></script>
