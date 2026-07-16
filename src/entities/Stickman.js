@@ -22,11 +22,29 @@ const MAX_SPEED_Y = 900;
 const DRAG_X = 1400;
 const JUMP_VELOCITY = -480;
 
+// Underdamped spring-damper: limbs overshoot their target pose and wobble back to
+// rest instead of snapping to it, which is what reads as "floppy" (Stick Fight-ish)
+// rather than a stiff puppet. Critical damping for this stiffness would be ~2*sqrt(320)
+// =~ 36; staying well under that keeps the bounce visible.
+const LIMB_SPRING_STIFFNESS = 320;
+const LIMB_SPRING_DAMPING = 16;
+const BOB_SPRING_STIFFNESS = 260;
+const BOB_SPRING_DAMPING = 14;
+
+// Whole-body lean driven by horizontal acceleration: leaning into a direction change
+// (and whipping back when it reverses) is most of what sells "floppy" at a glance.
+const LEAN_SPRING_STIFFNESS = 140;
+const LEAN_SPRING_DAMPING = 9;
+const MAX_LEAN = Phaser.Math.DegToRad(20);
+const LEAN_ACCEL_SCALE = MAX_LEAN / MOVE_ACCEL;
+
 /**
  * A stickman that IS the Arcade Physics body (gravity/velocity/collision live on
  * this container directly). Its pose is not spritesheet frames — every limb angle
- * is computed each frame from movement state (grounded/airborne/speed) and redrawn
- * as line segments pivoting from shoulder/hip points, like simple forward kinematics.
+ * is computed each frame from movement state (grounded/airborne/speed) as a target,
+ * then a spring-damper eases the actual drawn angle toward that target so motion
+ * overshoots and settles instead of snapping ("floppy" secondary motion). Physics
+ * collision (the Arcade body) is unaffected by this — only the Graphics redraw is.
  */
 export default class Stickman extends Phaser.GameObjects.Container {
   constructor(scene, x, y) {
@@ -46,7 +64,9 @@ export default class Stickman extends Phaser.GameObjects.Container {
     this.facing = 1;
     this.gaitPhase = 0;
     this.idlePhase = 0;
-    this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0 };
+
+    this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0, lean: 0 };
+    this.poseVel = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0, lean: 0 };
 
     this.draw();
   }
@@ -71,65 +91,81 @@ export default class Stickman extends Phaser.GameObjects.Container {
   }
 
   update(time, delta) {
-    const dt = delta / 1000;
-    const speed = this.body.velocity.x;
-    const absSpeed = Math.abs(speed);
+    const dt = Math.min(delta / 1000, 1 / 30);
+    const absSpeed = Math.abs(this.body.velocity.x);
 
     this.setScale(this.facing, 1);
 
-    if (!this.grounded) {
-      this._updateAirbornePose();
-    } else if (absSpeed > 8) {
-      this._updateRunPose(dt, absSpeed);
-    } else {
-      this._updateIdlePose(dt);
-    }
+    const targets = !this.grounded
+      ? this._airborneTargets()
+      : absSpeed > 8
+        ? this._runTargets(dt, absSpeed)
+        : this._idleTargets(dt);
+
+    const leanTarget = Phaser.Math.Clamp(this.body.acceleration.x * LEAN_ACCEL_SCALE, -MAX_LEAN, MAX_LEAN);
+
+    this._spring('leftLeg', targets.leftLeg, dt, LIMB_SPRING_STIFFNESS, LIMB_SPRING_DAMPING);
+    this._spring('rightLeg', targets.rightLeg, dt, LIMB_SPRING_STIFFNESS, LIMB_SPRING_DAMPING);
+    this._spring('leftArm', targets.leftArm, dt, LIMB_SPRING_STIFFNESS, LIMB_SPRING_DAMPING);
+    this._spring('rightArm', targets.rightArm, dt, LIMB_SPRING_STIFFNESS, LIMB_SPRING_DAMPING);
+    this._spring('bob', targets.bob, dt, BOB_SPRING_STIFFNESS, BOB_SPRING_DAMPING);
+    this._spring('lean', leanTarget, dt, LEAN_SPRING_STIFFNESS, LEAN_SPRING_DAMPING);
 
     this.draw();
   }
 
-  _updateAirbornePose() {
+  _spring(key, target, dt, stiffness, damping) {
+    const value = this.pose[key];
+    const vel = this.poseVel[key];
+    const accel = (target - value) * stiffness - vel * damping;
+    const nextVel = vel + accel * dt;
+    this.pose[key] = value + nextVel * dt;
+    this.poseVel[key] = nextVel;
+  }
+
+  _airborneTargets() {
     // Scissor pose: legs/arms mirror each other so a held jump reads as a spread
     // silhouette instead of converging onto a single overlapping line.
     const rising = this.body.velocity.y < 0;
-    const legTarget = rising ? Phaser.Math.DegToRad(-30) : Phaser.Math.DegToRad(20);
-    const armTarget = rising ? Phaser.Math.DegToRad(20) : Phaser.Math.DegToRad(-10);
+    const leg = rising ? Phaser.Math.DegToRad(-30) : Phaser.Math.DegToRad(20);
+    const arm = rising ? Phaser.Math.DegToRad(20) : Phaser.Math.DegToRad(-10);
 
-    this.pose.leftLeg = Phaser.Math.Linear(this.pose.leftLeg, legTarget, 0.25);
-    this.pose.rightLeg = Phaser.Math.Linear(this.pose.rightLeg, -legTarget, 0.25);
-    this.pose.leftArm = Phaser.Math.Linear(this.pose.leftArm, armTarget, 0.25);
-    this.pose.rightArm = Phaser.Math.Linear(this.pose.rightArm, -armTarget, 0.25);
-    this.pose.bob = 0;
     this.gaitPhase = 0;
+    return { leftLeg: leg, rightLeg: -leg, leftArm: arm, rightArm: -arm, bob: 0 };
   }
 
-  _updateRunPose(dt, absSpeed) {
+  _runTargets(dt, absSpeed) {
     const cycleRate = 2 + (absSpeed / GAIT_SPEED_FOR_FULL_CYCLE) * 6;
     this.gaitPhase += dt * cycleRate;
 
     const swing = Math.sin(this.gaitPhase);
-    this.pose.leftLeg = swing * MAX_LEG_SWING;
-    this.pose.rightLeg = -swing * MAX_LEG_SWING;
-    this.pose.leftArm = -swing * MAX_ARM_SWING;
-    this.pose.rightArm = swing * MAX_ARM_SWING;
-    this.pose.bob = Math.abs(swing) * 2;
+    return {
+      leftLeg: swing * MAX_LEG_SWING,
+      rightLeg: -swing * MAX_LEG_SWING,
+      leftArm: -swing * MAX_ARM_SWING,
+      rightArm: swing * MAX_ARM_SWING,
+      bob: Math.abs(swing) * 2,
+    };
   }
 
-  _updateIdlePose(dt) {
+  _idleTargets(dt) {
     this.gaitPhase = 0;
     this.idlePhase += dt * 1.6;
     const sway = Math.sin(this.idlePhase) * IDLE_SWAY;
 
-    this.pose.leftLeg = Phaser.Math.Linear(this.pose.leftLeg, IDLE_LEG_STANCE, 0.2);
-    this.pose.rightLeg = Phaser.Math.Linear(this.pose.rightLeg, -IDLE_LEG_STANCE, 0.2);
-    this.pose.leftArm = IDLE_ARM_STANCE + sway;
-    this.pose.rightArm = -IDLE_ARM_STANCE - sway;
-    this.pose.bob = Math.sin(this.idlePhase) * 1;
+    return {
+      leftLeg: IDLE_LEG_STANCE,
+      rightLeg: -IDLE_LEG_STANCE,
+      leftArm: IDLE_ARM_STANCE + sway,
+      rightArm: -IDLE_ARM_STANCE - sway,
+      bob: Math.sin(this.idlePhase) * 1,
+    };
   }
 
   draw() {
     const g = this.gfx;
     g.clear();
+    g.rotation = this.pose.lean;
 
     const bob = this.pose.bob || 0;
     const headY = HEAD_Y + bob;
