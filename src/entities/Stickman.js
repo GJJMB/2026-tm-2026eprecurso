@@ -34,6 +34,19 @@ const LEAN_SMOOTHNESS = 6.0;                      // per second
 const HIT_DURATION = 0.2;
 const SQUASH_FACTOR = 0.2;
 
+// --- Double jump ---
+const MAX_JUMPS = 1;                                      // ground jump + 1 air jump
+const DOUBLE_JUMP_VELOCITY = -420;
+const DOUBLE_JUMP_SPIN_DURATION = 0.25;                    // seconds the flip animation plays
+const DOUBLE_JUMP_SPIN_AMOUNT = Phaser.Math.DegToRad(360); // one full rotation
+
+// --- Wall jump ---
+const WALL_SLIDE_SPEED = 60;        // max fall speed while sliding down a wall
+const WALL_JUMP_VELOCITY_X = 300;   // horizontal kick away from wall
+const WALL_JUMP_VELOCITY_Y = -420;  // upward kick
+const WALL_JUMP_LOCKOUT = 0.15;     // seconds player can't re-steer after wall jump
+const WALL_COYOTE_TIME = 0.1;       // grace period after leaving a wall
+
 export default class Stickman extends Actor {
   constructor(scene, x, y) {
     super(scene, x, y);
@@ -57,6 +70,15 @@ export default class Stickman extends Actor {
     this.hitTime = 0;
     this.wasGrounded = false;
 
+    // --- Double jump state ---
+    this.jumpsUsed = 0;
+    this.doubleJumpTimer = 0;
+
+    // --- Wall jump state ---
+    this.wallSide = 0;          // -1 = wall on left, 1 = wall on right, 0 = none
+    this.wallCoyoteTimer = 0;
+    this.wallJumpLockTimer = 0;
+
     this.draw();
   }
 
@@ -64,7 +86,21 @@ export default class Stickman extends Actor {
     return this.body.blocked.down || this.body.touching.down;
   }
 
+  get onWallLeft() {
+    return this.body.blocked.left || this.body.touching.left;
+  }
+
+  get onWallRight() {
+    return this.body.blocked.right || this.body.touching.right;
+  }
+
+  get onWall() {
+    return (this.onWallLeft || this.onWallRight) && !this.grounded;
+  }
+
   setMove(dir) {
+    if (this.wallJumpLockTimer > 0) return; // ignore steering briefly after a wall jump
+
     if (dir !== 0) {
       this.body.setAccelerationX(MOVE_ACCEL * dir);
       this.facing = dir;
@@ -73,13 +109,46 @@ export default class Stickman extends Actor {
     }
   }
 
-  /** Returns true if a jump was actually triggered (i.e. was grounded), false otherwise. */
+  /**
+   * Single jump input. Handles ground jump, wall jump, and double jump
+   * with priority: ground > wall > air (double).
+   * Returns true if a jump was actually triggered, false otherwise.
+   */
   jump() {
     if (this.grounded) {
       this.body.setVelocityY(JUMP_VELOCITY);
+      this.jumpsUsed = 1;
       return true;
     }
+
+    if (this.wallSide !== 0) {
+      return this._wallJump();
+    }
+
+    if (this.jumpsUsed < MAX_JUMPS) {
+      this.body.setVelocityY(DOUBLE_JUMP_VELOCITY);
+      this.jumpsUsed++;
+      this.doubleJumpTimer = DOUBLE_JUMP_SPIN_DURATION;
+      return true;
+    }
+
     return false;
+  }
+
+  _wallJump() {
+    const kickDir = -this.wallSide; // jump away from the wall
+    this.body.setVelocityX(WALL_JUMP_VELOCITY_X * kickDir);
+    this.body.setVelocityY(WALL_JUMP_VELOCITY_Y);
+    this.facing = kickDir;
+
+    this.wallJumpLockTimer = WALL_JUMP_LOCKOUT;
+    this.wallSide = 0;
+    this.wallCoyoteTimer = 0;
+    this.jumpsUsed = 1; // still leaves one air jump available after a wall jump
+
+    this.hitTime = HIT_DURATION * 0.5; // small impact squash for feedback
+
+    return true;
   }
 
   update(time, delta) {
@@ -93,10 +162,44 @@ export default class Stickman extends Actor {
     }
     this.wasGrounded = isGrounded;
 
+    if (isGrounded) {
+      this.jumpsUsed = 0;
+      this.wallSide = 0;
+      this.wallCoyoteTimer = 0;
+    }
+
     // --- Update hit timer ---
     if (this.hitTime > 0) {
       this.hitTime -= dt;
       if (this.hitTime < 0) this.hitTime = 0;
+    }
+
+    // --- Update double jump spin timer ---
+    if (this.doubleJumpTimer > 0) {
+      this.doubleJumpTimer -= dt;
+      if (this.doubleJumpTimer < 0) this.doubleJumpTimer = 0;
+    }
+
+    // --- Wall detection / coyote time ---
+    if (this.onWallLeft) {
+      this.wallSide = -1;
+      this.wallCoyoteTimer = WALL_COYOTE_TIME;
+    } else if (this.onWallRight) {
+      this.wallSide = 1;
+      this.wallCoyoteTimer = WALL_COYOTE_TIME;
+    } else if (this.wallCoyoteTimer > 0) {
+      this.wallCoyoteTimer -= dt;
+    } else {
+      this.wallSide = 0;
+    }
+
+    if (this.wallJumpLockTimer > 0) {
+      this.wallJumpLockTimer -= dt;
+    }
+
+    // --- Wall slide: clamp fall speed while pressed against a wall ---
+    if (this.onWall && this.body.velocity.y > WALL_SLIDE_SPEED) {
+      this.body.setVelocityY(WALL_SLIDE_SPEED);
     }
 
     // --- Compute target lean based on velocity (inertia) ---
@@ -106,7 +209,11 @@ export default class Stickman extends Actor {
 
     // --- Update pose ---
     let targets;
-    if (!this.grounded) {
+    if (!this.grounded && this.doubleJumpTimer > 0) {
+      targets = this._doubleJumpTargets();
+    } else if (!this.grounded && this.wallSide !== 0) {
+      targets = this._wallSlideTargets();
+    } else if (!this.grounded) {
       targets = this._updateAirbornePose();
     } else if (absSpeed > 8) {
       targets = this._runTargets(dt, absSpeed);
@@ -125,6 +232,31 @@ export default class Stickman extends Actor {
 
     this.gaitPhase = 0;
     return { leftLeg: leg, rightLeg: -leg, leftArm: arm, rightArm: -arm, bob: 0 };
+  }
+
+  _doubleJumpTargets() {
+    // Tight tucked pose while the flip spin plays
+    this.gaitPhase = 0;
+    return {
+      leftLeg: Phaser.Math.DegToRad(-25),
+      rightLeg: Phaser.Math.DegToRad(25),
+      leftArm: Phaser.Math.DegToRad(-45),
+      rightArm: Phaser.Math.DegToRad(45),
+      bob: 0,
+    };
+  }
+
+  _wallSlideTargets() {
+    // Arms/legs press flat toward the wall
+    this.gaitPhase = 0;
+    const lean = this.wallSide;
+    return {
+      leftLeg: Phaser.Math.DegToRad(15) * lean,
+      rightLeg: Phaser.Math.DegToRad(-15) * lean,
+      leftArm: Phaser.Math.DegToRad(35) * lean,
+      rightArm: Phaser.Math.DegToRad(-10) * lean,
+      bob: 0,
+    };
   }
 
   _runTargets(dt, absSpeed) {
@@ -166,9 +298,16 @@ export default class Stickman extends Actor {
     }
     const squash = 1 - hitIntensity * SQUASH_FACTOR;
 
-    // --- Apply transform: scale (facing + squash) and rotation (lean) ---
+    // --- Double jump spin: full rotation that eases out over the flip duration ---
+    let spinRotation = 0;
+    if (this.doubleJumpTimer > 0) {
+      const spinProgress = 1 - (this.doubleJumpTimer / DOUBLE_JUMP_SPIN_DURATION);
+      spinRotation = DOUBLE_JUMP_SPIN_AMOUNT * spinProgress * this.facing;
+    }
+
+    // --- Apply transform: scale (facing + squash) and rotation (lean + spin) ---
     this.setScale(this.facing, squash);
-    this.setRotation(this.lean);
+    this.setRotation(this.lean + spinRotation);
 
     // --- Pose offsets (scaled vertically by squash) ---
     const bob = this.pose.bob || 0;
