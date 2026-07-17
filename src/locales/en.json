@@ -8,6 +8,7 @@
   "game.instructions": "Arrows / A-D to move, Up or Space to jump",
   "game.time": "Time",
   "game.lives": "Lives",
+  "game.score": "Score",
   "game.livesLeft": "lives left",
   "pause.title": "Paused",
   "pause.restart": "Restart",

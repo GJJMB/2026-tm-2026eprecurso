@@ -23,6 +23,10 @@ const BACKGROUND_DEPTH = -5;
 
 const DEFAULT_LEVEL_KEY = 'level1';
 const DEFAULT_LIVES = 3;
+// Grace period after stomping an enemy: without this, bouncing off one enemy while still
+// overlapping/falling toward a second (e.g. a cluster) would immediately burn a life on the
+// very next frame's overlap check, even though the stomp itself was a kill, not a hit.
+const STOMP_INVULNERABILITY_MS = 600;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -52,6 +56,8 @@ export default class GameScene extends Phaser.Scene {
     // defaults here; an explicit Restart deliberately omits it too, to reset to a full
     // set rather than carrying over a depleted count.
     this.lives = Number.isFinite(data && data.lives) ? data.lives : DEFAULT_LIVES;
+    // Score persists across level transitions the same way lives does (see _finish).
+    this.score = Number.isFinite(data && data.score) ? data.score : 0;
     const plan = LevelLoader.build(this, levelKey, groundTopY, this.campaignId);
     const levelWidth = Math.max(plan.levelWidth, width);
 
@@ -235,6 +241,12 @@ export default class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(10);
 
+    this.scoreLabel = t('game.score');
+    this.scoreText = this.add
+      .text(16, 64, `${this.scoreLabel}: ${this.score}`, { fontSize: '16px', color: '#ffffff' })
+      .setScrollFactor(0)
+      .setDepth(10);
+
     // Temporary "N lives left" banner shown while respawning (see _showCenterMessage):
     // created once here, hidden (alpha 0) until a death actually triggers it.
     this.centerMessageText = this.add
@@ -272,16 +284,28 @@ export default class GameScene extends Phaser.Scene {
 
   _handlePlayerEnemyCollision(player, enemy) {
     if (enemy.alive === false) return;
-    if (this.time.now < this.invulnerableUntil) return; // just respawned, brief grace period
-    // Only enemies that implement takeDamage/die (currently FalseFriend) can be stomped:
-    // anything else is simply lethal to touch, from any side.
+    if (this.time.now < this.invulnerableUntil) return; // just respawned/stomped, brief grace period
+    // Only enemies that implement takeDamage/die can be stomped: anything else is simply
+    // lethal to touch, from any side.
     const stompable = typeof enemy.takeDamage === 'function';
-    const playerBottom = player.y;
-    const enemyTop = enemy.y - 40;
-    if (stompable && player.body.velocity.y > 0 && playerBottom < enemyTop + 10) {
-      // Stomp → kill enemy
+    // Actual Arcade body bounds, not each Actor's own origin: a fixed origin-relative
+    // offset can't generalize across enemies whose body size/offset differ (e.g. Crawler's
+    // 20px circle centered on its origin vs. FalseFriend's 40px body anchored at its feet).
+    const playerBottom = player.body.y + player.body.height;
+    const enemyTop = enemy.body.y;
+    const falling = player.body.velocity.y > 0;
+    if (stompable && falling && playerBottom < enemyTop + 10) {
+      // Stomp → kill enemy, and bounce the player back up by exactly the speed they were
+      // falling at (captured before takeDamage/die can touch anything else), leaving
+      // horizontal velocity untouched since only Y is ever set here.
+      const fallSpeed = player.body.velocity.y;
       enemy.takeDamage();
-      player.body.setVelocityY(-300);
+      if (enemy.alive === false) {
+        this.score += enemy.points || 0;
+        this._updateScoreHud();
+      }
+      player.body.setVelocityY(-fallSpeed);
+      this.invulnerableUntil = this.time.now + STOMP_INVULNERABILITY_MS;
       this.sfx.play('jump');
     } else {
       this._loseLife();
@@ -502,6 +526,10 @@ export default class GameScene extends Phaser.Scene {
     this.livesText.setText(`${this.livesLabel}: ${this.lives}`);
   }
 
+  _updateScoreHud() {
+    this.scoreText.setText(`${this.scoreLabel}: ${this.score}`);
+  }
+
   /** Shows `text` centered on screen, then fades it back out: used for the "N lives
    * left" banner. `killTweensOf` guards against overlapping banners if death somehow
    * happens again before the previous one finished fading. */
@@ -524,7 +552,7 @@ export default class GameScene extends Phaser.Scene {
     this.player.setMove(0);
     this.sfx.play(won ? 'win' : 'lose');
     const nextLevel = won ? LevelLoader.getNextLevelKey(this, this.levelKey, this.campaignId) : null;
-    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel, campaignId: this.campaignId, lives: this.lives });
+    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel, campaignId: this.campaignId, lives: this.lives, score: this.score });
   }
 
   // ---- update ----

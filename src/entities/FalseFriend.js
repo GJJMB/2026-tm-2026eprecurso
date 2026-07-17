@@ -4,6 +4,7 @@
 import Actor from './Actor.js';
 
 const STUDY_DURATION = 4000; // ms
+const POINTS = 150; // awarded on a successful stomp kill, see GameScene._handlePlayerEnemyCollision
 
 export default class FalseFriend extends Actor {
   constructor(scene, x, y) {
@@ -18,6 +19,7 @@ export default class FalseFriend extends Actor {
     // Health
     this.health = 1;
     this.alive = true;
+    this.points = POINTS;
 
     // State
     this.state = 'STUDY';
@@ -134,8 +136,8 @@ export default class FalseFriend extends Actor {
 
   die() {
     this.alive = false;
-    this.body.setAllowGravity(false);
     this.body.setVelocity(0, 0);
+    this.body.enable = false; // fully out of collision, not just invisible: no ghost wall left behind
     this.visible = false;
   }
 

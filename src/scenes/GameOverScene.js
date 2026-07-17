@@ -11,20 +11,21 @@ export default class GameOverScene extends Phaser.Scene {
     this.nextLevel = data && data.nextLevel;
     this.campaignId = (data && data.campaignId) || null;
     this.lives = data && data.lives;
+    this.score = data && data.score;
   }
 
   create() {
     const restart = () => {
       hideGameOverMenu();
-      // `lives` deliberately omitted: Restart always starts the level fresh with a full
-      // set (see GameScene's default), unlike Next Level below which carries the current
-      // count forward.
+      // `lives`/`score` deliberately omitted: Restart always starts the level fresh with a
+      // full set (see GameScene's defaults), unlike Next Level below which carries the
+      // current count forward.
       this.scene.start('GameScene', { level: this.level, campaignId: this.campaignId });
     };
     const goToNextLevel = this.nextLevel
       ? () => {
           hideGameOverMenu();
-          this.scene.start('GameScene', { level: this.nextLevel, campaignId: this.campaignId, lives: this.lives });
+          this.scene.start('GameScene', { level: this.nextLevel, campaignId: this.campaignId, lives: this.lives, score: this.score });
         }
       : null;
 

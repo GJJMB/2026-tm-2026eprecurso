@@ -2,6 +2,8 @@
 
 import Actor from './Actor.js';
 
+const POINTS = 200; // awarded on a successful stomp kill, see GameScene._handlePlayerEnemyCollision
+
 export default class VomitSeagull extends Actor {
   /**
    * @param {Phaser.Scene} scene
@@ -42,6 +44,11 @@ export default class VomitSeagull extends Actor {
     // Store scene reference for spawning vomit
     this.sceneRef = scene;
 
+    // Health
+    this.health = 1;
+    this.alive = true;
+    this.points = POINTS;
+
     this.draw();
   }
 
@@ -51,6 +58,8 @@ export default class VomitSeagull extends Actor {
    * @param {number} delta - delta time in ms
    */
   update(time, delta) {
+    if (!this.alive) return;
+
     const dt = delta / 1000;
 
     // ---- Movement ----
@@ -78,6 +87,18 @@ export default class VomitSeagull extends Actor {
     }
 
     this.draw();
+  }
+
+  takeDamage() {
+    this.health--;
+    if (this.health <= 0) this.die();
+  }
+
+  die() {
+    this.alive = false;
+    this.body.setVelocity(0, 0);
+    this.body.enable = false;
+    this.visible = false;
   }
 
   /** Fire a vomit blob downward. */

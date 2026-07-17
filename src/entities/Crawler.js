@@ -1,5 +1,7 @@
 import Actor from './Actor.js';
 
+const POINTS = 100; // awarded on a successful stomp kill, see GameScene._handlePlayerEnemyCollision
+
 export default class Crawler extends Actor {
   /**
    * @param {Phaser.Scene} scene
@@ -25,10 +27,17 @@ export default class Crawler extends Actor {
     this.leftBound = leftBound || x - 150;
     this.rightBound = rightBound || x + 150;
 
+    // Health
+    this.health = 1;
+    this.alive = true;
+    this.points = POINTS;
+
     this.draw();
   }
 
   update() {
+    if (!this.alive) return;
+
     // Reverse if out of bounds
     if (this.x > this.rightBound) {
       this.direction = -1;
@@ -39,6 +48,18 @@ export default class Crawler extends Actor {
     }
     // Keep it on a fixed y (optional  if you want it to follow ground, you'd need raycasting)
     // For simplicity, we assume it's placed on ground and stays there.
+  }
+
+  takeDamage() {
+    this.health--;
+    if (this.health <= 0) this.die();
+  }
+
+  die() {
+    this.alive = false;
+    this.body.setVelocity(0, 0);
+    this.body.enable = false;
+    this.visible = false;
   }
 
   draw() {

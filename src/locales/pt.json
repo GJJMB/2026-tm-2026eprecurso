@@ -8,6 +8,7 @@
   "game.instructions": "Setas / A-D para mover, Cima ou Espaço para saltar",
   "game.time": "Tempo",
   "game.lives": "Vidas",
+  "game.score": "Pontuação",
   "game.livesLeft": "vidas restantes",
   "pause.title": "Pausa",
   "pause.restart": "Reiniciar",
