@@ -52,6 +52,27 @@
     .notif-wrap {
       position: relative;
     }
+    .lang-toggle {
+      display: flex;
+      gap: 4px;
+    }
+    .lang-flag-btn {
+      background: none;
+      padding: 4px 6px;
+      font-size: 16px;
+      border-radius: 6px;
+      opacity: 0.5;
+      filter: grayscale(1);
+    }
+    .lang-flag-btn:hover {
+      background: #2c2c3a;
+    }
+    .lang-flag-btn.active {
+      opacity: 1;
+      filter: none;
+      background: #26263a;
+      box-shadow: inset 0 -2px 0 #4a6cf7;
+    }
     .asset-item {
       cursor: default;
     }
@@ -723,14 +744,18 @@
 </head>
 <body>
   <div id="top-bar">
-    <div id="top-bar-title">Level Editor</div>
+    <div id="top-bar-title" data-i18n="editor.title">Level Editor</div>
     <div class="top-bar-right">
+      <div class="lang-toggle">
+        <button id="lang-en-btn" class="lang-flag-btn" type="button" data-lang="en" aria-label="English">🇬🇧</button>
+        <button id="lang-pt-btn" class="lang-flag-btn" type="button" data-lang="pt" aria-label="Português">🇵🇹</button>
+      </div>
       <div class="notif-wrap">
         <button id="notif-bell" type="button" aria-label="Validation errors">
           🔔<span id="notif-badge" class="notif-badge hidden">0</span>
         </button>
         <div class="notif-dropdown">
-          <p class="hint" id="notif-empty">No errors.</p>
+          <p class="hint" id="notif-empty" data-i18n="editor.notif.empty">No errors.</p>
           <ul id="notif-list"></ul>
         </div>
       </div>
@@ -738,164 +763,164 @@
   </div>
   <div id="app-body">
   <div id="sidebar">
-    <h1>Level Editor</h1>
+    <h1 data-i18n="editor.title">Level Editor</h1>
 
     <div class="editor-tabs">
-      <button class="editor-tab active" data-tab="section">Section</button>
-      <button class="editor-tab" data-tab="tiles">Tiles</button>
-      <button class="editor-tab" data-tab="entities">Entities</button>
-      <button class="editor-tab" data-tab="assets">Assets</button>
+      <button class="editor-tab active" data-tab="section" data-i18n="editor.tabs.section">Section</button>
+      <button class="editor-tab" data-tab="tiles" data-i18n="editor.tabs.tiles">Tiles</button>
+      <button class="editor-tab" data-tab="entities" data-i18n="editor.tabs.entities">Entities</button>
+      <button class="editor-tab" data-tab="assets" data-i18n="editor.tabs.assets">Assets</button>
     </div>
 
     <div id="tab-section" class="tab-panel" data-tab-panel="section">
-      <h2>Section</h2>
+      <h2 data-i18n="editor.section.heading">Section</h2>
       <div class="row">
         <div>
-          <label for="section-id">Section id</label>
+          <label for="section-id" data-i18n="editor.section.idLabel">Section id</label>
           <input type="text" id="section-id" value="new-section" />
         </div>
       </div>
       <div class="row">
         <div>
-          <label for="section-cols">Cols</label>
+          <label for="section-cols" data-i18n="editor.section.colsLabel">Cols</label>
           <input type="number" id="section-cols" min="4" max="256" value="20" />
         </div>
         <div>
-          <label for="section-rows">Rows</label>
+          <label for="section-rows" data-i18n="editor.section.rowsLabel">Rows</label>
           <input type="number" id="section-rows" min="4" max="64" value="12" />
         </div>
       </div>
       <div class="row">
-        <button id="resize-btn">Resize</button>
-        <button id="new-btn">New blank</button>
+        <button id="resize-btn" data-i18n="editor.section.resizeBtn">Resize</button>
+        <button id="new-btn" data-i18n="editor.section.newBlankBtn">New blank</button>
       </div>
-      <p class="hint" id="resize-warning-hint">
+      <p class="hint" id="resize-warning-hint" data-i18n="editor.section.resizeHint">
         Resizing keeps your existing grid/entities — new rows are added above (so the
         ground row stays anchored at the bottom) and new columns at the right. Shrinking
         past painted content deletes it.
       </p>
       <div id="resize-warning" class="hidden"></div>
 
-      <h2>Section JSON</h2>
+      <h2 data-i18n="editor.section.jsonHeading">Section JSON</h2>
       <div class="row">
-        <button id="export-section-btn" class="primary">Download section JSON</button>
+        <button id="export-section-btn" class="primary" data-i18n="editor.section.downloadBtn">Download section JSON</button>
       </div>
       <div class="row">
         <label class="file-btn">
-          <button type="button" id="import-section-label-btn">Load section JSON…</button>
+          <button type="button" id="import-section-label-btn" data-i18n="editor.section.loadJsonBtn">Load section JSON…</button>
           <input type="file" id="import-section-file" accept="application/json" />
         </label>
       </div>
 
-      <h2>Section library (this browser)</h2>
+      <h2 data-i18n="editor.section.libraryHeading">Section library (this browser)</h2>
       <div class="row">
-        <button id="save-section-btn">Save section to library</button>
+        <button id="save-section-btn" data-i18n="editor.section.saveToLibraryBtn">Save section to library</button>
       </div>
       <div class="row">
         <div>
-          <label for="load-section-select">Load from library</label>
+          <label for="load-section-select" data-i18n="editor.common.loadFromLibraryLabel">Load from library</label>
           <div style="display:flex; gap:6px;">
             <select id="load-section-select"></select>
-            <button id="load-section-btn">Load</button>
-            <button id="delete-section-btn" class="danger">Delete</button>
+            <button id="load-section-btn" data-i18n="editor.common.loadBtn">Load</button>
+            <button id="delete-section-btn" class="danger" data-i18n="editor.common.deleteBtn">Delete</button>
           </div>
         </div>
       </div>
 
-      <h2>Level sequence</h2>
+      <h2 data-i18n="editor.levelSequence.heading">Level sequence</h2>
       <div class="row">
         <div>
-          <label for="level-id">Level id</label>
+          <label for="level-id" data-i18n="editor.levelSequence.idLabel">Level id</label>
           <input type="text" id="level-id" value="level1" />
         </div>
       </div>
       <div class="row">
         <div>
-          <label for="level-parallax">Parallax set</label>
+          <label for="level-parallax" data-i18n="editor.levelSequence.parallaxLabel">Parallax set</label>
           <input type="text" id="level-parallax" value="level1" />
         </div>
       </div>
       <div class="row">
         <div>
-          <label for="add-section-input">Add current section to sequence</label>
+          <label for="add-section-input" data-i18n="editor.levelSequence.addLabel">Add current section to sequence</label>
           <div style="display:flex; gap:6px;">
-            <input type="text" id="add-section-input" placeholder="section id" />
-            <button id="add-section-btn">Add</button>
+            <input type="text" id="add-section-input" placeholder="section id" data-i18n-placeholder="editor.levelSequence.addPlaceholder" />
+            <button id="add-section-btn" data-i18n="editor.common.addBtn">Add</button>
           </div>
         </div>
       </div>
       <ul id="section-list"></ul>
       <div class="row">
-        <button id="export-level-btn" class="primary">Download level definition JSON</button>
+        <button id="export-level-btn" class="primary" data-i18n="editor.levelSequence.downloadBtn">Download level definition JSON</button>
       </div>
-      <p class="hint">
+      <p class="hint" data-i18n="editor.levelSequence.hint">
         Drop the section files into assets/levels/sections/ and this level's file into
         assets/levels/levels/ (as &lt;level id&gt;.json). Then add "&lt;level id&gt;" to the
         sequence array in assets/levels/levels.json (if it isn't there already) to play it in-game.
       </p>
       <div class="row">
-        <button id="save-level-btn">Save level to library</button>
+        <button id="save-level-btn" data-i18n="editor.levelSequence.saveToLibraryBtn">Save level to library</button>
       </div>
       <div class="row">
         <div>
-          <label for="load-level-select">Load from library</label>
+          <label for="load-level-select" data-i18n="editor.common.loadFromLibraryLabel">Load from library</label>
           <div style="display:flex; gap:6px;">
             <select id="load-level-select"></select>
-            <button id="load-level-btn">Load</button>
-            <button id="delete-level-btn" class="danger">Delete</button>
+            <button id="load-level-btn" data-i18n="editor.common.loadBtn">Load</button>
+            <button id="delete-level-btn" class="danger" data-i18n="editor.common.deleteBtn">Delete</button>
           </div>
         </div>
       </div>
 
-      <h2>Campaign</h2>
+      <h2 data-i18n="editor.campaign.heading">Campaign</h2>
       <div class="row">
         <div>
-          <label for="campaign-select">Campaign</label>
+          <label for="campaign-select" data-i18n="editor.campaign.selectLabel">Campaign</label>
           <select id="campaign-select"></select>
         </div>
       </div>
       <div class="row">
         <div>
-          <label for="campaign-name-input">Name / rename selected</label>
+          <label for="campaign-name-input" data-i18n="editor.campaign.nameLabel">Name / rename selected</label>
           <div style="display:flex; gap:6px;">
-            <input type="text" id="campaign-name-input" placeholder="Campaign name" />
-            <button id="new-campaign-btn">New</button>
-            <button id="delete-campaign-btn" class="danger">Delete</button>
+            <input type="text" id="campaign-name-input" placeholder="Campaign name" data-i18n-placeholder="editor.campaign.namePlaceholder" />
+            <button id="new-campaign-btn" data-i18n="editor.campaign.newBtn">New</button>
+            <button id="delete-campaign-btn" class="danger" data-i18n="editor.common.deleteBtn">Delete</button>
           </div>
         </div>
       </div>
       <div class="row">
         <div>
-          <label for="add-level-to-campaign-select">Add level to campaign</label>
+          <label for="add-level-to-campaign-select" data-i18n="editor.campaign.addLevelLabel">Add level to campaign</label>
           <div style="display:flex; gap:6px;">
             <select id="add-level-to-campaign-select"></select>
-            <button id="add-level-to-campaign-btn">Add</button>
+            <button id="add-level-to-campaign-btn" data-i18n="editor.common.addBtn">Add</button>
           </div>
         </div>
       </div>
       <ul id="campaign-level-list"></ul>
-      <p class="hint">
+      <p class="hint" data-i18n="editor.campaign.hint">
         Levels here must each have exactly one spawn and one goal, summed across their
         sections — invalid ones show red. Saved campaigns appear in the game's main menu.
       </p>
     </div>
 
     <div id="tab-tiles" class="tab-panel hidden" data-tab-panel="tiles">
-      <h2>Layer</h2>
+      <h2 data-i18n="editor.tiles.layerHeading">Layer</h2>
       <div class="type-toggle" style="margin-bottom: 8px;">
-        <button id="layer-fg-btn" class="primary" data-layer="foreground">Foreground</button>
-        <button id="layer-bg-btn" data-layer="background">Background</button>
+        <button id="layer-fg-btn" class="primary" data-layer="foreground" data-i18n="editor.tiles.foregroundBtn">Foreground</button>
+        <button id="layer-bg-btn" data-layer="background" data-i18n="editor.tiles.backgroundBtn">Background</button>
       </div>
-      <p class="hint">
+      <p class="hint" data-i18n="editor.tiles.layerHint">
         Foreground holds interactable Ground/Hazard tiles and entities — this is what the
         player collides with. Background holds purely decorative ground-equivalent sprites
         behind the action; it never collides and can't hold entities.
       </p>
 
-      <h2>Tiles</h2>
+      <h2 data-i18n="editor.tiles.tilesHeading">Tiles</h2>
       <div id="fg-tools">
         <div class="tool-grid" id="fg-tool-grid"></div>
-        <p class="hint">
+        <p class="hint" data-i18n="editor.tiles.fgHint">
           Drag to paint. The highlighted bottom row is the ground baseline every section
           anchors to. Each brush below is its own sprite/color — add more in the Tileset
           section to paint several distinct-looking Ground/Hazard tiles in one section.
@@ -903,26 +928,26 @@
       </div>
       <div id="bg-tools" class="hidden">
         <div class="tool-grid" id="bg-tool-grid"></div>
-        <p class="hint">
+        <p class="hint" data-i18n="editor.tiles.bgHint">
           Drag to paint decorative background tiles. These sit behind everything else and
           never block or collide with the player.
         </p>
       </div>
 
-      <h2>Tileset (this section)</h2>
+      <h2 data-i18n="editor.tiles.tilesetHeading">Tileset (this section)</h2>
       <div class="row">
         <div>
-          <label for="tileset-category">Category</label>
+          <label for="tileset-category" data-i18n="editor.tiles.categoryLabel">Category</label>
           <select id="tileset-category">
-            <option value="ground">Ground</option>
-            <option value="hazard">Hazard</option>
-            <option value="background">Background</option>
+            <option value="ground" data-i18n="editor.style.ground">Ground</option>
+            <option value="hazard" data-i18n="editor.style.hazard">Hazard</option>
+            <option value="background" data-i18n="editor.style.background">Background</option>
           </select>
         </div>
       </div>
       <ul id="tileset-type-list" class="obj-list"></ul>
-      <button id="tileset-add-btn" style="width: 100%;">+ Add variant</button>
-      <p class="hint">
+      <button id="tileset-add-btn" style="width: 100%;" data-i18n="editor.tiles.addVariantBtn">+ Add variant</button>
+      <p class="hint" data-i18n="editor.tiles.tilesetHint">
         Click a type to edit its color/sprite. "+ Add variant" makes a new brush with its
         own look (e.g. a second Ground sprite) that shows up as its own tool above and in
         the Type picker on a selected platform below. Each section keeps its own tileset,
@@ -931,17 +956,17 @@
     </div>
 
     <div id="tab-entities" class="tab-panel hidden" data-tab-panel="entities">
-      <h2>Entities</h2>
+      <h2 data-i18n="editor.entities.heading">Entities</h2>
       <div class="entity-tabs">
-        <button class="tool-btn entity-tab" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span>Spawn</button>
-        <button class="tool-btn entity-tab" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span>Goal</button>
-        <button class="tool-btn entity-tab" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span>Moving</button>
-        <button class="tool-btn entity-tab" data-tool="enemyFalseFriend"><span class="swatch" style="background:#ff8800"></span>False Friend</button>
-        <button class="tool-btn entity-tab" data-tool="enemyCrawler"><span class="swatch" style="background:#44aa44"></span>Crawler</button>
-        <button class="tool-btn entity-tab" data-tool="enemyVomitSeagull"><span class="swatch" style="background:#ffcc00"></span>Seagull</button>
-        <button class="tool-btn entity-tab" data-tool="checkpoint"><span class="swatch" style="background:#38d9a9"></span>Checkpoint</button>
+        <button class="tool-btn entity-tab" data-tool="playerSpawn"><span class="swatch" style="background:#7CFC9A"></span><span data-i18n="editor.entities.toolSpawn">Spawn</span></button>
+        <button class="tool-btn entity-tab" data-tool="goal"><span class="swatch" style="background:#ffcc33"></span><span data-i18n="editor.entities.toolGoal">Goal</span></button>
+        <button class="tool-btn entity-tab" data-tool="movingPlatform"><span class="swatch" style="background:#00ccff"></span><span data-i18n="editor.entities.toolMoving">Moving</span></button>
+        <button class="tool-btn entity-tab" data-tool="enemyFalseFriend"><span class="swatch" style="background:#ff8800"></span><span data-i18n="editor.entities.toolFalseFriend">False Friend</span></button>
+        <button class="tool-btn entity-tab" data-tool="enemyCrawler"><span class="swatch" style="background:#44aa44"></span><span data-i18n="editor.entities.toolCrawler">Crawler</span></button>
+        <button class="tool-btn entity-tab" data-tool="enemyVomitSeagull"><span class="swatch" style="background:#ffcc00"></span><span data-i18n="editor.entities.toolSeagull">Seagull</span></button>
+        <button class="tool-btn entity-tab" data-tool="checkpoint"><span class="swatch" style="background:#38d9a9"></span><span data-i18n="editor.entities.toolCheckpoint">Checkpoint</span></button>
       </div>
-      <p class="hint">
+      <p class="hint" data-i18n="editor.entities.hint">
         Click an empty cell to place the selected entity (Spawn/Goal are singletons —
         placing a new one moves the old; Moving/enemies allow any number). Already-placed
         entities and platform tiles are listed in the right sidebar — select one there (or
@@ -952,26 +977,26 @@
     </div>
 
     <div id="tab-assets" class="tab-panel hidden" data-tab-panel="assets">
-      <h2>Assets</h2>
-      <p class="hint">
+      <h2 data-i18n="editor.assets.heading">Assets</h2>
+      <p class="hint" data-i18n="editor.assets.hint">
         Assets belong to the campaign selected below in the Campaign panel — uploading one
         here bundles it with that campaign, not shared with any other. Kind (image vs.
         audio) is detected automatically from the file you pick.
       </p>
       <div class="row">
         <label class="file-btn">
-          <button type="button" id="upload-asset-label-btn">Upload asset…</button>
+          <button type="button" id="upload-asset-label-btn" data-i18n="editor.assets.uploadBtn">Upload asset…</button>
           <input type="file" id="upload-asset-file" accept="image/png,image/jpeg,audio/mpeg,audio/ogg" />
         </label>
       </div>
 
-      <h2>Images / Sprites</h2>
+      <h2 data-i18n="editor.assets.imagesHeading">Images / Sprites</h2>
       <ul id="asset-list-image" class="obj-list"></ul>
-      <p class="hint" id="asset-list-image-empty">No images yet — upload a PNG/JPEG (≤128KB) file.</p>
+      <p class="hint" id="asset-list-image-empty" data-i18n="editor.assets.imagesEmpty">No images yet — upload a PNG/JPEG (≤128KB) file.</p>
 
-      <h2>Audio</h2>
+      <h2 data-i18n="editor.assets.audioHeading">Audio</h2>
       <ul id="asset-list-audio" class="obj-list"></ul>
-      <p class="hint" id="asset-list-audio-empty">No audio yet — upload an MP3/OGG (≤1MB) file.</p>
+      <p class="hint" id="asset-list-audio-empty" data-i18n="editor.assets.audioEmpty">No audio yet — upload an MP3/OGG (≤1MB) file.</p>
     </div>
   </div>
 
@@ -980,38 +1005,38 @@
       <div id="grid"></div>
     </div>
     <div>
-      <h2 style="margin-top:0">Live JSON preview</h2>
+      <h2 style="margin-top:0" data-i18n="editor.main.jsonPreviewHeading">Live JSON preview</h2>
       <textarea id="json-preview" spellcheck="false"></textarea>
       <div class="row" style="margin-top:8px;">
-        <button id="apply-json-btn">Apply edited JSON above</button>
+        <button id="apply-json-btn" data-i18n="editor.main.applyJsonBtn">Apply edited JSON above</button>
       </div>
     </div>
   </div>
 
   <div id="right-sidebar">
-    <h1>Entities &amp; Platforms</h1>
+    <h1 data-i18n="editor.rightSidebar.heading">Entities &amp; Platforms</h1>
 
-    <h2>Entities</h2>
+    <h2 data-i18n="editor.entities.heading">Entities</h2>
     <ul id="entity-list" class="obj-list"></ul>
-    <p class="hint" id="entity-list-empty">None placed yet — use the Entities tools on the left.</p>
+    <p class="hint" id="entity-list-empty" data-i18n="editor.rightSidebar.entitiesEmpty">None placed yet — use the Entities tools on the left.</p>
 
-    <h2>Platforms</h2>
+    <h2 data-i18n="editor.rightSidebar.platformsHeading">Platforms</h2>
     <ul id="platform-list" class="obj-list"></ul>
-    <p class="hint" id="platform-list-empty">None placed yet — paint Ground/Hazard on the left.</p>
+    <p class="hint" id="platform-list-empty" data-i18n="editor.rightSidebar.platformsEmpty">None placed yet — paint Ground/Hazard on the left.</p>
 
-    <h2>Background</h2>
+    <h2 data-i18n="editor.rightSidebar.backgroundHeading">Background</h2>
     <ul id="bg-list" class="obj-list"></ul>
-    <p class="hint" id="bg-list-empty">None placed yet — switch to the Background layer and paint on the left.</p>
+    <p class="hint" id="bg-list-empty" data-i18n="editor.rightSidebar.backgroundEmpty">None placed yet — switch to the Background layer and paint on the left.</p>
 
-    <h2>Selected</h2>
+    <h2 data-i18n="editor.rightSidebar.selectedHeading">Selected</h2>
     <div id="entity-inspector" class="inspector hidden">
       <div class="inspector-header">
         <span id="inspector-title">—</span>
-        <button id="inspector-delete" class="danger">Delete</button>
+        <button id="inspector-delete" class="danger" data-i18n="editor.common.deleteBtn">Delete</button>
       </div>
       <div id="inspector-fields"></div>
     </div>
-    <p class="hint" id="inspector-empty-hint">
+    <p class="hint" id="inspector-empty-hint" data-i18n="editor.rightSidebar.inspectorEmptyHint">
       Click an item above (or a marker/tile on the grid) to view and edit its properties.
     </p>
   </div>

@@ -31,6 +31,7 @@ import {
 } from '../data/db.js';
 import { computeAllErrors, hasError } from '../data/validation.js';
 import { ASSET_KIND, saveAssetFile, assetToDataUrl } from '../data/assets.js';
+import { t, getLanguage, setLanguage, initLocalesViaFetch } from '../i18n.js';
 
 const els = {
   sectionId: document.getElementById('section-id'),
@@ -94,6 +95,8 @@ const els = {
   notifBadge: document.getElementById('notif-badge'),
   notifList: document.getElementById('notif-list'),
   notifEmpty: document.getElementById('notif-empty'),
+  langEnBtn: document.getElementById('lang-en-btn'),
+  langPtBtn: document.getElementById('lang-pt-btn'),
   uploadAssetLabelBtn: document.getElementById('upload-asset-label-btn'),
   uploadAssetFile: document.getElementById('upload-asset-file'),
   assetListImage: document.getElementById('asset-list-image'),
@@ -102,15 +105,23 @@ const els = {
   assetListAudioEmpty: document.getElementById('asset-list-audio-empty'),
 };
 
-const ENTITY_LABELS = {
-  [ENTITY_TYPES.PLAYER_SPAWN]: 'Player Spawn',
-  [ENTITY_TYPES.GOAL]: 'Goal',
-  [ENTITY_TYPES.MOVING_PLATFORM]: 'Moving Platform',
-  [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: 'False Friend',
-  [ENTITY_TYPES.ENEMY_CRAWLER]: 'Crawler',
-  [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: 'Vomit Seagull',
-  [ENTITY_TYPES.CHECKPOINT]: 'Checkpoint',
+// Keys, not literal strings, so entityLabel() below always reflects the current language
+// (unlike a plain lookup object, which would freeze in whatever language was active when
+// the module first evaluated).
+const ENTITY_LABEL_KEYS = {
+  [ENTITY_TYPES.PLAYER_SPAWN]: 'editor.entityLabel.playerSpawn',
+  [ENTITY_TYPES.GOAL]: 'editor.entityLabel.goal',
+  [ENTITY_TYPES.MOVING_PLATFORM]: 'editor.entityLabel.movingPlatform',
+  [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: 'editor.entityLabel.enemyFalseFriend',
+  [ENTITY_TYPES.ENEMY_CRAWLER]: 'editor.entityLabel.enemyCrawler',
+  [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: 'editor.entityLabel.enemyVomitSeagull',
+  [ENTITY_TYPES.CHECKPOINT]: 'editor.entityLabel.checkpoint',
 };
+
+function entityLabel(type) {
+  const key = ENTITY_LABEL_KEYS[type];
+  return key ? t(key) : type;
+}
 
 const ENTITY_COLORS = {
   [ENTITY_TYPES.PLAYER_SPAWN]: '#7CFC9A',
@@ -245,11 +256,11 @@ function variantCharsOfKind(kind) {
 /** Display label for any foreground/background character, base or variant — "Ground",
  * "Ground 2", "Hazard 3", "Background 2", etc. */
 function styleLabel(char) {
-  if (char === CELL.GROUND) return 'Ground';
-  if (char === CELL.HAZARD) return 'Hazard';
-  if (char === CELL.BACKGROUND) return 'Background';
+  if (char === CELL.GROUND) return t('editor.style.ground');
+  if (char === CELL.HAZARD) return t('editor.style.hazard');
+  if (char === CELL.BACKGROUND) return t('editor.style.background');
   const kind = tileStyleKind(char, state.tileStyles);
-  const kindLabel = kind === 'hazard' ? 'Hazard' : kind === 'background' ? 'Background' : 'Ground';
+  const kindLabel = kind === 'hazard' ? t('editor.style.hazard') : kind === 'background' ? t('editor.style.background') : t('editor.style.ground');
   const idx = variantCharsOfKind(kind).indexOf(char);
   return `${kindLabel} ${idx + 2}`; // base itself is implicitly "1"
 }
@@ -272,7 +283,7 @@ function nextVariantChar() {
 function addVariant(kind) {
   const char = nextVariantChar();
   if (!char) {
-    alert('No more tile-variant slots available for this section.');
+    alert(t('editor.alert.noVariantSlots'));
     return;
   }
   const defaultColor =
@@ -290,7 +301,7 @@ function addVariant(kind) {
  * silently break re-export/re-import round-tripping. */
 function removeVariant(char) {
   if (char === CELL.GROUND || char === CELL.HAZARD || char === CELL.BACKGROUND) return;
-  if (!confirm('Remove this variant? Any tiles painted with it will be cleared back to empty.')) return;
+  if (!confirm(t('editor.confirm.removeVariant'))) return;
   for (let r = 0; r < state.rows; r++) {
     for (let c = 0; c < state.cols; c++) {
       if (state.grid[r][c] === char) state.grid[r][c] = CELL.EMPTY;
@@ -363,7 +374,7 @@ function renderTilesetTypeList() {
     if (state.tileStyles[char] && state.tileStyles[char].texture) {
       const badge = document.createElement('span');
       badge.className = 'sprite-badge';
-      badge.textContent = 'sprite';
+      badge.textContent = t('editor.tileset.spriteBadge');
       li.appendChild(badge);
     }
     li.addEventListener('click', () => openTilesetModal(char));
@@ -390,7 +401,7 @@ function openTilesetModal(char) {
 
   addAppearanceField(
     els.tilesetModalBody,
-    'Appearance',
+    t('editor.inspector.appearance'),
     state.tileStyles[char],
     TILESET_DEFAULT_COLOR[tilesetCategory],
     () => {
@@ -405,7 +416,7 @@ function openTilesetModal(char) {
 
   if (!isBase) {
     const removeBtn = document.createElement('button');
-    removeBtn.textContent = 'Remove variant';
+    removeBtn.textContent = t('editor.tileset.removeVariantBtn');
     removeBtn.className = 'danger';
     removeBtn.style.width = '100%';
     removeBtn.style.marginTop = '14px';
@@ -706,7 +717,7 @@ function addWaypointsField(container, entityIndex, entity) {
   const wrap = document.createElement('div');
   wrap.className = 'field-row';
   const label = document.createElement('label');
-  label.textContent = 'Waypoints';
+  label.textContent = t('editor.inspector.waypoints');
   wrap.appendChild(label);
 
   const lastIdx = entity.waypoints.length - 1;
@@ -716,16 +727,16 @@ function addWaypointsField(container, entityIndex, entity) {
 
     const tag = document.createElement('span');
     tag.className = 'wp-label';
-    tag.textContent = wpIdx === 0 ? 'Start' : wpIdx === lastIdx ? 'End' : `Mid ${wpIdx}`;
+    tag.textContent = wpIdx === 0 ? t('editor.waypoint.start') : wpIdx === lastIdx ? t('editor.waypoint.end') : `${t('editor.waypoint.mid')} ${wpIdx}`;
 
     const pos = document.createElement('span');
     pos.className = 'wp-pos';
-    pos.textContent = `col ${wp.col}, row ${wp.row}`;
+    pos.textContent = `${t('editor.pos.col')} ${wp.col}, ${t('editor.pos.row')} ${wp.row}`;
 
     const isArmed =
       placingWaypoint && placingWaypoint.entityIndex === entityIndex && placingWaypoint.waypointIndex === wpIdx;
     const placeBtn = document.createElement('button');
-    placeBtn.textContent = isArmed ? 'Click grid…' : 'Reposition';
+    placeBtn.textContent = isArmed ? t('editor.inspector.clickGridBtn') : t('editor.inspector.repositionBtn');
     placeBtn.className = isArmed ? 'armed' : '';
     placeBtn.addEventListener('click', () => armWaypointPlacement(entityIndex, wpIdx));
 
@@ -742,7 +753,7 @@ function addWaypointsField(container, entityIndex, entity) {
   });
 
   const addBtn = document.createElement('button');
-  addBtn.textContent = '+ Add midpoint';
+  addBtn.textContent = t('editor.inspector.addMidpointBtn');
   addBtn.style.width = '100%';
   addBtn.style.marginTop = '2px';
   addBtn.addEventListener('click', () => addMidpoint(entityIndex));
@@ -755,7 +766,7 @@ function addSegmentSpeedsField(container, entity) {
   const wrap = document.createElement('div');
   wrap.className = 'field-row';
   const label = document.createElement('label');
-  label.textContent = 'Segment speeds (px/s)';
+  label.textContent = t('editor.inspector.segmentSpeeds');
   wrap.appendChild(label);
 
   entity.speeds.forEach((speed, segIdx) => {
@@ -854,7 +865,7 @@ function addAppearanceField(container, labelText, obj, defaultColor, onValueChan
     });
     return btn;
   };
-  toggle.append(makeModeBtn('color', 'Color'), makeModeBtn('sprite', 'Sprite'));
+  toggle.append(makeModeBtn('color', t('editor.appearance.color')), makeModeBtn('sprite', t('editor.appearance.sprite')));
   wrap.appendChild(toggle);
 
   if (mode === 'color') {
@@ -884,7 +895,7 @@ function addAppearanceField(container, labelText, obj, defaultColor, onValueChan
     const hint = document.createElement('p');
     hint.className = 'hint';
     hint.style.marginTop = '6px';
-    hint.textContent = 'No sprite textures available yet — add one to assets/images/platform-textures.json.';
+    hint.textContent = t('editor.hint.noSpriteTextures');
     wrap.appendChild(hint);
   }
 
@@ -893,12 +904,8 @@ function addAppearanceField(container, labelText, obj, defaultColor, onValueChan
   container.appendChild(wrap);
 }
 
-const TILE_MODE_LABELS = { stretch: 'Stretch', repeat: 'Repeat', maximise: 'Maximise' };
-const TILE_MODE_HINTS = {
-  stretch: 'One image stretched to cover the whole tile — simple, but distorts a sprite that isn’t naturally that shape.',
-  repeat: 'Tiles the sprite at its native size, repeating across the area — no stretching, but seams can show on odd sizes.',
-  maximise: 'Finds the largest rectangular block(s) within this connected same-tile area and stretches each one individually — good for big or irregularly-shaped areas (e.g. a staircase of the same tile) since each piece stays closer to square.',
-};
+const TILE_MODE_LABEL_KEYS = { stretch: 'editor.tileMode.stretch', repeat: 'editor.tileMode.repeat', maximise: 'editor.tileMode.maximise' };
+const TILE_MODE_HINT_KEYS = { stretch: 'editor.tileMode.stretchHint', repeat: 'editor.tileMode.repeatHint', maximise: 'editor.tileMode.maximiseHint' };
 
 /** Sprite-only tiling mode picker (Stretch/Repeat/Maximise — see levelFormat.js's
  * decomposeMaximizedRegions for what Maximise actually does). Not shown for Color
@@ -911,14 +918,14 @@ function addTileModeField(container, obj, onValueChange, rerender) {
   const wrap = document.createElement('div');
   wrap.className = 'field-row';
   const label = document.createElement('label');
-  label.textContent = 'Tiling';
+  label.textContent = t('editor.inspector.tilingLabel');
   wrap.appendChild(label);
 
   const toggle = document.createElement('div');
   toggle.className = 'type-toggle';
   ['stretch', 'repeat', 'maximise'].forEach((mode) => {
     const btn = document.createElement('button');
-    btn.textContent = TILE_MODE_LABELS[mode];
+    btn.textContent = t(TILE_MODE_LABEL_KEYS[mode]);
     btn.className = mode === currentMode ? 'primary' : '';
     btn.addEventListener('click', () => {
       if (mode === 'stretch') delete obj.tileMode;
@@ -933,7 +940,7 @@ function addTileModeField(container, obj, onValueChange, rerender) {
   const hint = document.createElement('p');
   hint.className = 'hint';
   hint.style.marginTop = '6px';
-  hint.textContent = TILE_MODE_HINTS[currentMode];
+  hint.textContent = t(TILE_MODE_HINT_KEYS[currentMode]);
   wrap.appendChild(hint);
 
   container.appendChild(wrap);
@@ -958,20 +965,20 @@ function renderInspector() {
 
   if (selection.kind === 'entity') {
     const entity = state.entities[selection.index];
-    els.inspectorTitle.textContent = ENTITY_LABELS[entity.type] || entity.type;
+    els.inspectorTitle.textContent = entityLabel(entity.type);
 
     if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
-      addNumberField(els.inspectorFields, 'Width (cells)', entity.widthCells, (v) => {
+      addNumberField(els.inspectorFields, t('editor.inspector.widthCells'), entity.widthCells, (v) => {
         entity.widthCells = v;
         syncPreview();
       });
-      addNumberField(els.inspectorFields, 'Height (cells)', entity.heightCells || 1, (v) => {
+      addNumberField(els.inspectorFields, t('editor.inspector.heightCells'), entity.heightCells || 1, (v) => {
         entity.heightCells = v;
         syncPreview();
       });
       addAppearanceField(
         els.inspectorFields,
-        'Appearance',
+        t('editor.inspector.appearance'),
         entity,
         DEFAULT_MOVING_PLATFORM_COLOR,
         syncPreview,
@@ -982,13 +989,13 @@ function renderInspector() {
       if (placingWaypoint && placingWaypoint.entityIndex === selection.index) {
         const hint = document.createElement('div');
         hint.className = 'placement-hint';
-        hint.textContent = 'Click a cell on the grid to place this waypoint.';
+        hint.textContent = t('editor.inspector.placementHint');
         els.inspectorFields.appendChild(hint);
       }
     } else {
-      addReadonlyField(els.inspectorFields, 'Position', `col ${entity.col}, row ${entity.row}`);
+      addReadonlyField(els.inspectorFields, t('editor.inspector.position'), `${t('editor.pos.col')} ${entity.col}, ${t('editor.pos.row')} ${entity.row}`);
       if (PATROLLING_ENEMY_TYPES.includes(entity.type)) {
-        addNumberField(els.inspectorFields, 'Patrol range (cells each way)', entity.rangeCols, (v) => {
+        addNumberField(els.inspectorFields, t('editor.inspector.patrolRange'), entity.rangeCols, (v) => {
           entity.rangeCols = v;
           syncPreview();
         });
@@ -999,19 +1006,19 @@ function renderInspector() {
     const lastCol = selection.startCol + selection.colSpan - 1;
     addReadonlyField(
       els.inspectorFields,
-      'Position',
-      `row ${selection.row}, cols ${selection.startCol}-${lastCol} (${selection.colSpan} cells)`
+      t('editor.inspector.position'),
+      `${t('editor.pos.row')} ${selection.row}, ${t('editor.pos.cols')} ${selection.startCol}-${lastCol} (${selection.colSpan} ${t('editor.pos.cells')})`
     );
-    addVariantPickerField(els.inspectorFields, 'Type', selection.type, ['background']);
+    addVariantPickerField(els.inspectorFields, t('editor.inspector.type'), selection.type, ['background']);
   } else {
     els.inspectorTitle.textContent = styleLabel(selection.type);
     const lastCol = selection.startCol + selection.colSpan - 1;
     addReadonlyField(
       els.inspectorFields,
-      'Position',
-      `row ${selection.row}, cols ${selection.startCol}-${lastCol} (${selection.colSpan} cells)`
+      t('editor.inspector.position'),
+      `${t('editor.pos.row')} ${selection.row}, ${t('editor.pos.cols')} ${selection.startCol}-${lastCol} (${selection.colSpan} ${t('editor.pos.cells')})`
     );
-    addVariantPickerField(els.inspectorFields, 'Type', selection.type, ['ground', 'hazard']);
+    addVariantPickerField(els.inspectorFields, t('editor.inspector.type'), selection.type, ['ground', 'hazard']);
   }
 }
 
@@ -1052,8 +1059,8 @@ function renderEntityList() {
     label.className = 'obj-item-label';
     label.textContent =
       entity.type === ENTITY_TYPES.MOVING_PLATFORM
-        ? `Moving Platform — ${entity.waypoints.length} waypoints`
-        : `${ENTITY_LABELS[entity.type] || entity.type} — col ${entity.col}, row ${entity.row}`;
+        ? `${entityLabel(ENTITY_TYPES.MOVING_PLATFORM)} — ${entity.waypoints.length} ${t('editor.entityList.waypointsSuffix')}`
+        : `${entityLabel(entity.type)} — ${t('editor.pos.col')} ${entity.col}, ${t('editor.pos.row')} ${entity.row}`;
 
     li.append(swatch, label);
     li.addEventListener('click', () => selectEntity(idx));
@@ -1077,7 +1084,7 @@ function renderPlatformList() {
 
     const label = document.createElement('span');
     label.className = 'obj-item-label';
-    label.textContent = `${styleLabel(run.type)} — row ${run.row}, cols ${run.startCol}-${run.startCol + run.colSpan - 1}`;
+    label.textContent = `${styleLabel(run.type)} — ${t('editor.pos.row')} ${run.row}, ${t('editor.pos.cols')} ${run.startCol}-${run.startCol + run.colSpan - 1}`;
 
     li.append(swatch, label);
     li.addEventListener('click', () => selectPlatform(run));
@@ -1101,7 +1108,7 @@ function renderBgList() {
 
     const label = document.createElement('span');
     label.className = 'obj-item-label';
-    label.textContent = `${styleLabel(run.type)} — row ${run.row}, cols ${run.startCol}-${run.startCol + run.colSpan - 1}`;
+    label.textContent = `${styleLabel(run.type)} — ${t('editor.pos.row')} ${run.row}, ${t('editor.pos.cols')} ${run.startCol}-${run.startCol + run.colSpan - 1}`;
 
     li.append(swatch, label);
     li.addEventListener('click', () => selectBgPlatform(run));
@@ -1261,7 +1268,7 @@ function renderFgToolButtons() {
   els.fgToolGrid.innerHTML = '';
   const chars = [CELL.GROUND, ...variantCharsOfKind('ground'), CELL.HAZARD, ...variantCharsOfKind('hazard')];
   chars.forEach((c) => els.fgToolGrid.appendChild(makeToolButton(c, styleLabel(c), cellSwatchColor(c))));
-  els.fgToolGrid.appendChild(makeToolButton(CELL.EMPTY, 'Eraser', '#1d1d2b'));
+  els.fgToolGrid.appendChild(makeToolButton(CELL.EMPTY, t('editor.tools.eraser'), '#1d1d2b'));
   syncToolButtonActive();
 }
 
@@ -1270,7 +1277,7 @@ function renderBgToolButtons() {
   els.bgToolGrid.innerHTML = '';
   const chars = [CELL.BACKGROUND, ...variantCharsOfKind('background')];
   chars.forEach((c) => els.bgToolGrid.appendChild(makeToolButton(c, styleLabel(c), cellSwatchColor(c))));
-  els.bgToolGrid.appendChild(makeToolButton(CELL.EMPTY, 'Eraser', '#1d1d2b'));
+  els.bgToolGrid.appendChild(makeToolButton(CELL.EMPTY, t('editor.tools.eraser'), '#1d1d2b'));
   syncToolButtonActive();
 }
 
@@ -1332,7 +1339,7 @@ function loadState(next) {
 }
 
 els.newBtn.addEventListener('click', () => {
-  if (!confirm('Start a new blank section? Unsaved changes will be lost.')) return;
+  if (!confirm(t('editor.confirm.newBlankSection'))) return;
   loadState(makeBlankState('new-section', DEFAULT_COLS, DEFAULT_ROWS));
 });
 
@@ -1353,7 +1360,7 @@ let pendingResize = null; // { cols, rows, rowOffset, losses } | null
 
 function clearPendingResize() {
   pendingResize = null;
-  els.resizeBtn.textContent = 'Resize';
+  els.resizeBtn.textContent = t('editor.section.resizeBtn');
   els.resizeBtn.classList.remove('confirm-danger');
   els.resizeWarning.classList.add('hidden');
   els.resizeWarning.innerHTML = '';
@@ -1363,7 +1370,7 @@ function renderResizeWarning(losses) {
   els.resizeWarning.innerHTML = '';
   const intro = document.createElement('p');
   intro.style.margin = '0 0 4px';
-  intro.textContent = `This resize deletes ${losses.length} item${losses.length === 1 ? '' : 's'}:`;
+  intro.textContent = `${t('editor.resize.deletesPrefix')} ${losses.length} ${losses.length === 1 ? t('editor.resize.item') : t('editor.resize.items')}:`;
   els.resizeWarning.appendChild(intro);
 
   const list = document.createElement('ul');
@@ -1377,7 +1384,7 @@ function renderResizeWarning(losses) {
   });
   if (losses.length > shown.length) {
     const li = document.createElement('li');
-    li.textContent = `…and ${losses.length - shown.length} more`;
+    li.textContent = `${t('editor.resize.andMorePrefix')} ${losses.length - shown.length} ${t('editor.resize.andMoreSuffix')}`;
     list.appendChild(li);
   }
   els.resizeWarning.appendChild(list);
@@ -1390,19 +1397,19 @@ function computeResizeImpact(cols, rows) {
   const rowOffset = rows - state.rows;
   const losses = [];
 
-  const checkGrid = (grid, layerLabel) => {
+  const checkGrid = (grid, layerLabelKey) => {
     for (let r = 0; r < state.rows; r++) {
       for (let c = 0; c < state.cols; c++) {
         if (grid[r][c] === CELL.EMPTY) continue;
         const newRow = r + rowOffset;
         if (newRow < 0 || newRow >= rows || c >= cols) {
-          losses.push(`${layerLabel} tile at col ${c}, row ${r}`);
+          losses.push(`${t(layerLabelKey)} ${t('editor.resize.tileAt')} ${t('editor.pos.col')} ${c}, ${t('editor.pos.row')} ${r}`);
         }
       }
     }
   };
-  checkGrid(state.grid, 'Foreground');
-  checkGrid(state.bgGrid, 'Background');
+  checkGrid(state.grid, 'editor.tiles.foregroundBtn');
+  checkGrid(state.bgGrid, 'editor.tiles.backgroundBtn');
 
   state.entities.forEach((entity) => {
     if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
@@ -1410,11 +1417,11 @@ function computeResizeImpact(cols, rows) {
         const newRow = wp.row + rowOffset;
         return newRow < 0 || newRow >= rows || wp.col < 0 || wp.col >= cols;
       });
-      if (outOfBounds) losses.push('Moving Platform entity');
+      if (outOfBounds) losses.push(t('editor.resize.movingPlatformEntity'));
     } else {
       const newRow = entity.row + rowOffset;
       if (newRow < 0 || newRow >= rows || entity.col < 0 || entity.col >= cols) {
-        losses.push(`${ENTITY_LABELS[entity.type] || entity.type} entity at col ${entity.col}, row ${entity.row}`);
+        losses.push(`${entityLabel(entity.type)} ${t('editor.resize.entityAt')} ${t('editor.pos.col')} ${entity.col}, ${t('editor.pos.row')} ${entity.row}`);
       }
     }
   });
@@ -1479,7 +1486,7 @@ els.resizeBtn.addEventListener('click', () => {
   }
 
   pendingResize = { cols, rows, rowOffset, losses };
-  els.resizeBtn.textContent = 'Confirm?';
+  els.resizeBtn.textContent = t('editor.section.resizeConfirmBtn');
   els.resizeBtn.classList.add('confirm-danger');
   renderResizeWarning(losses);
 });
@@ -1513,7 +1520,7 @@ els.exportSectionBtn.addEventListener('click', () => {
 
 function importSectionData(data) {
   if (!isValidSection(data)) {
-    alert('That JSON does not look like a valid section file.');
+    alert(t('editor.alert.invalidSectionJson'));
     return;
   }
   loadState({
@@ -1547,7 +1554,7 @@ els.importFile.addEventListener('change', async () => {
   try {
     importSectionData(JSON.parse(await file.text()));
   } catch (err) {
-    alert(`Could not parse JSON: ${err.message}`);
+    alert(`${t('editor.alert.jsonParseErrorPrefix')} ${err.message}`);
   }
   els.importFile.value = '';
 });
@@ -1556,7 +1563,7 @@ els.applyJsonBtn.addEventListener('click', () => {
   try {
     importSectionData(JSON.parse(els.jsonPreview.value));
   } catch (err) {
-    alert(`Could not parse JSON: ${err.message}`);
+    alert(`${t('editor.alert.jsonParseErrorPrefix')} ${err.message}`);
   }
 });
 
@@ -1641,9 +1648,9 @@ let campaigns = [];
 let currentCampaignId = null;
 let currentErrors = [];
 
-async function confirmOverwrite(kind, id, existing) {
+async function confirmOverwrite(kindLabel, id, existing) {
   if (!existing) return true;
-  return confirm(`A ${kind} named '${id}' already exists in your library — overwrite it?`);
+  return confirm(`${t('editor.confirm.overwritePrefix')} ${kindLabel} '${id}' ${t('editor.confirm.overwriteSuffix')}`);
 }
 
 function fillSelect(select, ids) {
@@ -1671,10 +1678,10 @@ async function populateLevelSelects() {
 }
 
 els.saveSectionBtn.addEventListener('click', async () => {
-  if (!isIndexedDbAvailable()) return alert('IndexedDB is not available in this browser.');
+  if (!isIndexedDbAvailable()) return alert(t('editor.alert.indexedDbUnavailable'));
   const data = exportSection();
   const existing = await getSection(data.id);
-  if (!(await confirmOverwrite('section', data.id, existing))) return;
+  if (!(await confirmOverwrite(t('editor.kind.section'), data.id, existing))) return;
   await putSection(data);
   await populateSectionSelects();
   await refreshValidation();
@@ -1684,24 +1691,24 @@ els.loadSectionBtn.addEventListener('click', async () => {
   const id = els.loadSectionSelect.value;
   if (!id) return;
   const data = await getSection(id);
-  if (!data) return alert(`No section named '${id}' in the library.`);
+  if (!data) return alert(`${t('editor.alert.notInLibraryPrefix')} ${t('editor.kind.section')} '${id}' ${t('editor.alert.notInLibrarySuffix')}`);
   importSectionData(data);
 });
 
 els.deleteSectionBtn.addEventListener('click', async () => {
   const id = els.loadSectionSelect.value;
   if (!id) return;
-  if (!confirm(`Delete section '${id}' from the library? Levels referencing it will show an error.`)) return;
+  if (!confirm(`${t('editor.confirm.deleteSectionPrefix')} '${id}' ${t('editor.confirm.deleteSectionSuffix')}`)) return;
   await deleteSection(id);
   await populateSectionSelects();
   await refreshValidation();
 });
 
 els.saveLevelBtn.addEventListener('click', async () => {
-  if (!isIndexedDbAvailable()) return alert('IndexedDB is not available in this browser.');
+  if (!isIndexedDbAvailable()) return alert(t('editor.alert.indexedDbUnavailable'));
   const data = buildLevelData();
   const existing = await getLevel(data.id);
-  if (!(await confirmOverwrite('level', data.id, existing))) return;
+  if (!(await confirmOverwrite(t('editor.kind.level'), data.id, existing))) return;
   await putLevel(data);
   await populateLevelSelects();
   await refreshValidation();
@@ -1711,14 +1718,14 @@ els.loadLevelBtn.addEventListener('click', async () => {
   const id = els.loadLevelSelect.value;
   if (!id) return;
   const data = await getLevel(id);
-  if (!data) return alert(`No level named '${id}' in the library.`);
+  if (!data) return alert(`${t('editor.alert.notInLibraryPrefix')} ${t('editor.kind.level')} '${id}' ${t('editor.alert.notInLibrarySuffix')}`);
   loadLevelData(data);
 });
 
 els.deleteLevelBtn.addEventListener('click', async () => {
   const id = els.loadLevelSelect.value;
   if (!id) return;
-  if (!confirm(`Delete level '${id}' from the library? Campaigns referencing it will show an error.`)) return;
+  if (!confirm(`${t('editor.confirm.deleteLevelPrefix')} '${id}' ${t('editor.confirm.deleteLevelSuffix')}`)) return;
   await deleteLevel(id);
   await populateLevelSelects();
   await refreshValidation();
@@ -1796,7 +1803,7 @@ els.campaignSelect.addEventListener('change', () => {
 });
 
 els.newCampaignBtn.addEventListener('click', async () => {
-  const name = els.campaignNameInput.value.trim() || 'New campaign';
+  const name = els.campaignNameInput.value.trim() || t('editor.newCampaignDefaultName');
   const campaign = { id: generateCampaignId(), name, levelIds: [], assets: { keyMap: {} } };
   await putCampaign(campaign);
   campaigns.push(campaign);
@@ -1818,12 +1825,7 @@ els.campaignNameInput.addEventListener('change', async () => {
 els.deleteCampaignBtn.addEventListener('click', async () => {
   const campaign = currentCampaign();
   if (!campaign) return;
-  if (
-    !confirm(
-      `Delete campaign '${campaign.name}'? This removes the campaign and its uploaded assets, but not its levels/sections (those stay in the library).`
-    )
-  )
-    return;
+  if (!confirm(`${t('editor.confirm.deleteCampaignPrefix')} '${campaign.name}'? ${t('editor.confirm.deleteCampaignSuffix')}`)) return;
   // Unlike sections/levels/campaigns (globally reusable by id), an asset belongs
   // exclusively to the campaign that owns its keyMap entry — so it doesn't outlive it.
   const keyMap = (campaign.assets && campaign.assets.keyMap) || {};
@@ -1887,7 +1889,7 @@ function buildAssetRow(userKey, systemKey, asset, keyMap, campaign) {
       return;
     }
     if (keyMap[newKey]) {
-      alert(`An asset named '${newKey}' already exists in this campaign.`);
+      alert(`${t('editor.alert.assetNameExists')} '${newKey}' ${t('editor.alert.assetNameExistsSuffix')}`);
       nameInput.value = userKey;
       return;
     }
@@ -1901,7 +1903,7 @@ function buildAssetRow(userKey, systemKey, asset, keyMap, campaign) {
   removeBtn.textContent = '✕';
   removeBtn.className = 'danger';
   removeBtn.addEventListener('click', async () => {
-    if (!confirm(`Delete asset '${userKey}'?`)) return;
+    if (!confirm(`${t('editor.confirm.deleteAssetPrefix')} '${userKey}'?`)) return;
     delete keyMap[userKey];
     await putCampaign(campaign);
     await deleteAsset(systemKey);
@@ -1923,7 +1925,7 @@ async function renderAssetList() {
 
   if (!campaign) {
     els.assetListImageEmpty.classList.remove('hidden');
-    els.assetListImageEmpty.textContent = 'Select or create a campaign in the Campaign panel first.';
+    els.assetListImageEmpty.textContent = t('editor.assets.selectCampaignFirst');
     els.assetListAudioEmpty.classList.add('hidden');
     return;
   }
@@ -1938,9 +1940,9 @@ async function renderAssetList() {
   }
 
   els.assetListImageEmpty.classList.toggle('hidden', imageRows.length > 0);
-  els.assetListImageEmpty.textContent = 'No images yet — upload a PNG/JPEG (≤128KB) file.';
+  els.assetListImageEmpty.textContent = t('editor.assets.imagesEmpty');
   els.assetListAudioEmpty.classList.toggle('hidden', audioRows.length > 0);
-  els.assetListAudioEmpty.textContent = 'No audio yet — upload an MP3/OGG (≤1MB) file.';
+  els.assetListAudioEmpty.textContent = t('editor.assets.audioEmpty');
 
   for (const { userKey, systemKey, asset } of imageRows) {
     els.assetListImage.appendChild(buildAssetRow(userKey, systemKey, asset, keyMap, campaign));
@@ -1960,7 +1962,7 @@ els.uploadAssetFile.addEventListener('change', async () => {
   if (!file) return;
 
   const campaign = currentCampaign();
-  if (!campaign) return alert('Select or create a campaign first.');
+  if (!campaign) return alert(t('editor.alert.selectCampaignFirst'));
   const keyMap = assetsOf(campaign).keyMap;
 
   // Dedupe the default key (the filename, minus its extension) against this campaign's
@@ -2049,9 +2051,73 @@ async function initLocalLibrary() {
   await refreshValidation();
 }
 
-initLocalLibrary();
+// --- Localization (flag toggle, top-right of the top bar — see editor.html) ---
+//
+// The editor is plain static JS, not a Phaser scene (same reasoning as the
+// platform-textures.json fetch above), so it can't use i18n.js's normal
+// queueLocaleLoads/initLocales pair (those drive off a Phaser scene's load queue/cache) —
+// initLocalesViaFetch() is the fetch-based equivalent for exactly this kind of context.
+// `t`/`getLanguage`/`setLanguage` are otherwise identical to the game's usage, including
+// sharing the same localStorage key, so a language picked in one tab is picked up by the
+// other next time it loads.
+
+function syncLangButtons() {
+  const lang = getLanguage();
+  els.langEnBtn.classList.toggle('active', lang === 'en');
+  els.langPtBtn.classList.toggle('active', lang === 'pt');
+}
+
+/** Applies the current language to every static piece of markup carrying a data-i18n
+ * (textContent) or data-i18n-placeholder (placeholder) attribute — see editor.html. */
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.documentElement.lang = getLanguage();
+  syncLangButtons();
+}
+
+/** Re-renders every panel whose text is built in JS rather than sitting in static HTML
+ * (entity/tool labels, tileset names, inspector fields, campaign list, ...) — these don't
+ * carry data-i18n attributes, so applyTranslations() alone can't refresh them. Only needed
+ * after an explicit language switch; on first load, loadState()/initLocalLibrary() below
+ * already render everything fresh once the dictionaries are in place. */
+function refreshDynamicLabels() {
+  renderFgToolButtons();
+  renderBgToolButtons();
+  renderTilesetFields();
+  renderEntityList();
+  renderPlatformList();
+  renderBgList();
+  renderInspector();
+  renderCampaignLevelList();
+  renderAssetList();
+}
+
+function setLang(lang) {
+  if (lang === getLanguage()) return;
+  setLanguage(lang);
+  applyTranslations();
+  refreshDynamicLabels();
+}
+
+els.langEnBtn.addEventListener('click', () => setLang('en'));
+els.langPtBtn.addEventListener('click', () => setLang('pt'));
 
 // --- Init ---
+//
+// Locale dictionaries must be fetched before anything renders — otherwise every t() call
+// made while building the initial grid/panels would fall back to raw keys (t()'s
+// no-dictionary-yet fallback) and briefly flash untranslated strings.
+async function init() {
+  await initLocalesViaFetch();
+  applyTranslations();
+  loadState(state);
+  renderSectionList();
+  await initLocalLibrary();
+}
 
-loadState(state);
-renderSectionList();
+init();
