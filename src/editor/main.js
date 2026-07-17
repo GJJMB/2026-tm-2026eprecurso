@@ -26,8 +26,11 @@ import {
   putCampaign,
   deleteCampaign,
   generateCampaignId,
+  getAsset,
+  deleteAsset,
 } from '../data/db.js';
 import { computeAllErrors, hasError } from '../data/validation.js';
+import { ASSET_KIND, saveAssetFile, assetToDataUrl } from '../data/assets.js';
 
 const els = {
   sectionId: document.getElementById('section-id'),
@@ -91,6 +94,12 @@ const els = {
   notifBadge: document.getElementById('notif-badge'),
   notifList: document.getElementById('notif-list'),
   notifEmpty: document.getElementById('notif-empty'),
+  uploadAssetLabelBtn: document.getElementById('upload-asset-label-btn'),
+  uploadAssetFile: document.getElementById('upload-asset-file'),
+  assetListImage: document.getElementById('asset-list-image'),
+  assetListImageEmpty: document.getElementById('asset-list-image-empty'),
+  assetListAudio: document.getElementById('asset-list-audio'),
+  assetListAudioEmpty: document.getElementById('asset-list-audio-empty'),
 };
 
 const ENTITY_LABELS = {
@@ -100,6 +109,7 @@ const ENTITY_LABELS = {
   [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: 'False Friend',
   [ENTITY_TYPES.ENEMY_CRAWLER]: 'Crawler',
   [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: 'Vomit Seagull',
+  [ENTITY_TYPES.CHECKPOINT]: 'Checkpoint',
 };
 
 const ENTITY_COLORS = {
@@ -109,6 +119,7 @@ const ENTITY_COLORS = {
   [ENTITY_TYPES.ENEMY_FALSE_FRIEND]: '#ff8800',
   [ENTITY_TYPES.ENEMY_CRAWLER]: '#44aa44',
   [ENTITY_TYPES.ENEMY_VOMIT_SEAGULL]: '#ffcc00',
+  [ENTITY_TYPES.CHECKPOINT]: '#38d9a9',
 };
 
 const ENEMY_MARKER_TEXT = {
@@ -491,6 +502,9 @@ function renderMarkersAndHighlight() {
     } else if (entity.type === ENTITY_TYPES.GOAL) {
       marker.className = 'entity-marker goal';
       marker.textContent = 'F';
+    } else if (entity.type === ENTITY_TYPES.CHECKPOINT) {
+      marker.className = 'entity-marker checkpoint';
+      marker.textContent = 'C';
     } else if (ENEMY_MARKER_CLASS[entity.type]) {
       marker.className = `entity-marker ${ENEMY_MARKER_CLASS[entity.type]}`;
       marker.textContent = ENEMY_MARKER_TEXT[entity.type];
@@ -1203,6 +1217,8 @@ function placeEntity(row, col) {
     state.entities.push(makeMovingPlatformEntity(row, col));
   } else if (ENEMY_TOOL_TYPES.includes(currentTool)) {
     state.entities.push(makeEnemyEntity(currentTool, row, col));
+  } else if (currentTool === ENTITY_TYPES.CHECKPOINT) {
+    state.entities.push({ type: currentTool, col, row });
   } else {
     return;
   }
@@ -1776,16 +1792,18 @@ function renderCampaignLevelList() {
 els.campaignSelect.addEventListener('change', () => {
   currentCampaignId = els.campaignSelect.value || null;
   renderCampaignLevelList();
+  renderAssetList();
 });
 
 els.newCampaignBtn.addEventListener('click', async () => {
   const name = els.campaignNameInput.value.trim() || 'New campaign';
-  const campaign = { id: generateCampaignId(), name, levelIds: [] };
+  const campaign = { id: generateCampaignId(), name, levelIds: [], assets: { keyMap: {} } };
   await putCampaign(campaign);
   campaigns.push(campaign);
   currentCampaignId = campaign.id;
   renderCampaignSelect();
   renderCampaignLevelList();
+  renderAssetList();
   await refreshValidation();
 });
 
@@ -1800,13 +1818,170 @@ els.campaignNameInput.addEventListener('change', async () => {
 els.deleteCampaignBtn.addEventListener('click', async () => {
   const campaign = currentCampaign();
   if (!campaign) return;
-  if (!confirm(`Delete campaign '${campaign.name}'? This only removes the campaign, not its levels/sections.`)) return;
+  if (
+    !confirm(
+      `Delete campaign '${campaign.name}'? This removes the campaign and its uploaded assets, but not its levels/sections (those stay in the library).`
+    )
+  )
+    return;
+  // Unlike sections/levels/campaigns (globally reusable by id), an asset belongs
+  // exclusively to the campaign that owns its keyMap entry — so it doesn't outlive it.
+  const keyMap = (campaign.assets && campaign.assets.keyMap) || {};
+  await Promise.all(Object.values(keyMap).map((systemKey) => deleteAsset(systemKey)));
   await deleteCampaign(campaign.id);
   campaigns = campaigns.filter((c) => c.id !== campaign.id);
   currentCampaignId = null;
   renderCampaignSelect();
   renderCampaignLevelList();
+  renderAssetList();
   await refreshValidation();
+});
+
+// --- Assets (per-campaign, top-bar panel) ---
+//
+// Unlike sections/levels (global, reused by id across levels/campaigns), assets belong to
+// exactly one campaign: the campaign's own `assets.keyMap` is the sole source of truth for
+// which asset records belong to it (see the deleteCampaignBtn handler above for the
+// cascade-delete this implies). Each entry is `{ [userKey]: systemKey }` — `userKey` is the
+// editable display name; `systemKey` is the stable id actually used to store/retrieve the
+// base64 record (see assets.js) and never changes, so renaming never has to move data.
+
+function generateAssetSystemKey() {
+  return `asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function assetsOf(campaign) {
+  if (!campaign.assets) campaign.assets = { keyMap: {} };
+  if (!campaign.assets.keyMap) campaign.assets.keyMap = {};
+  return campaign.assets;
+}
+
+/** Builds one asset row (thumbnail/icon + editable name + delete), shared by both the
+ * Images/Sprites and Audio lists — the only thing that differs between them is which
+ * container it's appended to and how the thumbnail renders (see renderAssetList). */
+function buildAssetRow(userKey, systemKey, asset, keyMap, campaign) {
+  const li = document.createElement('li');
+  li.className = 'obj-item asset-item';
+
+  const thumb = document.createElement('div');
+  thumb.className = 'asset-thumb';
+  if (asset.kind === ASSET_KIND.IMAGE) {
+    const img = document.createElement('img');
+    img.src = assetToDataUrl(asset);
+    img.alt = userKey;
+    thumb.appendChild(img);
+  } else {
+    // Audio has no meaningful visual thumbnail — a generic note icon stands in for it.
+    thumb.classList.add('asset-thumb-audio');
+    thumb.textContent = '🎵';
+  }
+
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.className = 'asset-name-input';
+  nameInput.value = userKey;
+  nameInput.addEventListener('change', async () => {
+    const newKey = nameInput.value.trim();
+    if (!newKey || newKey === userKey) {
+      nameInput.value = userKey;
+      return;
+    }
+    if (keyMap[newKey]) {
+      alert(`An asset named '${newKey}' already exists in this campaign.`);
+      nameInput.value = userKey;
+      return;
+    }
+    delete keyMap[userKey];
+    keyMap[newKey] = systemKey;
+    await putCampaign(campaign);
+    renderAssetList();
+  });
+
+  const removeBtn = document.createElement('button');
+  removeBtn.textContent = '✕';
+  removeBtn.className = 'danger';
+  removeBtn.addEventListener('click', async () => {
+    if (!confirm(`Delete asset '${userKey}'?`)) return;
+    delete keyMap[userKey];
+    await putCampaign(campaign);
+    await deleteAsset(systemKey);
+    renderAssetList();
+  });
+
+  li.append(thumb, nameInput, removeBtn);
+  return li;
+}
+
+/** Renders the Assets tab's two always-visible divided lists (Images/Sprites, Audio) —
+ * one shared upload button feeds both, routed by each asset's own `kind` (auto-detected
+ * from the uploaded file's mime type — see assets.js's validateAssetFile). */
+async function renderAssetList() {
+  els.assetListImage.innerHTML = '';
+  els.assetListAudio.innerHTML = '';
+  const campaign = currentCampaign();
+  els.uploadAssetLabelBtn.disabled = !campaign;
+
+  if (!campaign) {
+    els.assetListImageEmpty.classList.remove('hidden');
+    els.assetListImageEmpty.textContent = 'Select or create a campaign in the Campaign panel first.';
+    els.assetListAudioEmpty.classList.add('hidden');
+    return;
+  }
+
+  const keyMap = assetsOf(campaign).keyMap;
+  const imageRows = [];
+  const audioRows = [];
+  for (const [userKey, systemKey] of Object.entries(keyMap)) {
+    const asset = await getAsset(systemKey);
+    if (!asset) continue;
+    (asset.kind === ASSET_KIND.IMAGE ? imageRows : audioRows).push({ userKey, systemKey, asset });
+  }
+
+  els.assetListImageEmpty.classList.toggle('hidden', imageRows.length > 0);
+  els.assetListImageEmpty.textContent = 'No images yet — upload a PNG/JPEG (≤128KB) file.';
+  els.assetListAudioEmpty.classList.toggle('hidden', audioRows.length > 0);
+  els.assetListAudioEmpty.textContent = 'No audio yet — upload an MP3/OGG (≤1MB) file.';
+
+  for (const { userKey, systemKey, asset } of imageRows) {
+    els.assetListImage.appendChild(buildAssetRow(userKey, systemKey, asset, keyMap, campaign));
+  }
+  for (const { userKey, systemKey, asset } of audioRows) {
+    els.assetListAudio.appendChild(buildAssetRow(userKey, systemKey, asset, keyMap, campaign));
+  }
+}
+
+els.uploadAssetLabelBtn.addEventListener('click', () => {
+  if (!els.uploadAssetLabelBtn.disabled) els.uploadAssetFile.click();
+});
+
+els.uploadAssetFile.addEventListener('change', async () => {
+  const file = els.uploadAssetFile.files[0];
+  els.uploadAssetFile.value = '';
+  if (!file) return;
+
+  const campaign = currentCampaign();
+  if (!campaign) return alert('Select or create a campaign first.');
+  const keyMap = assetsOf(campaign).keyMap;
+
+  // Dedupe the default key (the filename, minus its extension) against this campaign's
+  // existing keys — the user can always rename afterward via the name field.
+  let userKey = file.name.replace(/\.[^.]+$/, '') || file.name;
+  if (keyMap[userKey]) {
+    let n = 2;
+    while (keyMap[`${userKey} ${n}`]) n++;
+    userKey = `${userKey} ${n}`;
+  }
+
+  const systemKey = generateAssetSystemKey();
+  try {
+    await saveAssetFile(systemKey, file, userKey);
+  } catch (err) {
+    alert(err.message);
+    return;
+  }
+  keyMap[userKey] = systemKey;
+  await putCampaign(campaign);
+  renderAssetList();
 });
 
 els.addLevelToCampaignBtn.addEventListener('click', async () => {
@@ -1867,6 +2042,7 @@ async function initLocalLibrary() {
     campaigns = await getAllCampaigns();
     renderCampaignSelect();
     renderCampaignLevelList();
+    await renderAssetList();
   } catch (err) {
     console.error('Failed to load saved campaigns:', err);
   }
