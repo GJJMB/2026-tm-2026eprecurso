@@ -14,7 +14,7 @@ import {
  * tileStyles opted into 'maximise' tiling (see levelFormat.js's decomposeMaximizedRegions)
  * are pulled out of the normal per-row run merge and rendered as the fewest largest
  * rectangles spanning their whole connected same-tile area instead; every other character
- * keeps the simple, cheaper per-row merge (mergeRowRuns) — both feed the same tile shape,
+ * keeps the simple, cheaper per-row merge (mergeRowRuns): both feed the same tile shape,
  * they just disagree on how many world-space cells one tile object covers.
  */
 function buildLayerTiles(grid, { rows, groundTopY, cellSize, offsetX, tileStyles, lastRow, includeGroundRow, includeKind }) {
@@ -60,7 +60,7 @@ const LEVEL_DEFS_BASE_PATH = 'assets/levels/levels/';
 const SECTIONS_BASE_PATH = 'assets/levels/sections/';
 
 // `campaignId` namespaces these keys so a user-authored campaign (see src/data/db.js,
-// seeded directly into this cache by MenuScene via cache.json.add — no network load
+// seeded directly into this cache by MenuScene via cache.json.add: no network load
 // involved) can define level/section ids that collide with the built-in game's without
 // clobbering it, and so two different campaigns can't collide with each other either.
 // Omitted (undefined) keeps today's exact keys, so every existing call site (BootScene,
@@ -74,17 +74,17 @@ export function sectionCacheKey(id, campaignId) {
 }
 
 /** Cache key for a campaign's own ordered level-id sequence (the campaign-scoped
- * equivalent of LEVELS_SEQUENCE_KEY) — seeded by MenuScene when a campaign is selected. */
+ * equivalent of LEVELS_SEQUENCE_KEY): seeded by MenuScene when a campaign is selected. */
 export function campaignManifestCacheKey(campaignId) {
   return `campaignLevels:${campaignId}`;
 }
 
 /**
- * Assembles a level from its own definition file (assets/levels/levels/<id>.json — hand-written
+ * Assembles a level from its own definition file (assets/levels/levels/<id>.json: hand-written
  * or exported from the grid editor, see editor.html) plus that definition's pre-made sections
  * (assets/levels/sections/*.json), strung together left-to-right. assets/levels/levels.json holds
  * only the ordered list of level ids to play, not level content, so it stays readable as levels
- * are added. Adding a level is a sequence-array edit + a definition file + section files — no
+ * are added. Adding a level is a sequence-array edit + a definition file + section files: no
  * code change.
  */
 export default class LevelLoader {
@@ -133,7 +133,7 @@ export default class LevelLoader {
   }
 
   /** The level id that follows `levelKey` in assets/levels/levels.json's sequence (or, when
-   * `campaignId` is given, in that campaign's own level sequence — seeded by MenuScene under
+   * `campaignId` is given, in that campaign's own level sequence: seeded by MenuScene under
    * campaignManifestCacheKey), or null if `levelKey` is last (or not found). Used to offer a
    * "Next Level" action on a win. */
   static getNextLevelKey(scene, levelKey, campaignId) {
@@ -150,11 +150,11 @@ export default class LevelLoader {
    * authored independently still line up when strung together end to end.
    *
    * Returns { parallax, cellSize, levelWidth, levelHeight, tiles, bgTiles, entities },
-   * where tiles/bgTiles/entities are already in world pixel coordinates — GameScene turns
+   * where tiles/bgTiles/entities are already in world pixel coordinates: GameScene turns
    * those into actual Phaser game objects (that's the only part that needs
    * physics/collider wiring). `tiles` is the interactable foreground layer (unchanged
    * shape/semantics); `bgTiles` is the purely decorative background layer (see
-   * levelFormat.js's `bgGrid` docs) — same shape minus `isGroundRow`, since background
+   * levelFormat.js's `bgGrid` docs): same shape minus `isGroundRow`, since background
    * tiles never collide and have no "ground baseline" concept. Each tile also carries its
    * owning section's `style` (that section's tileStyles entry for the tile's character, or
    * null), so differently-styled sections never bleed into each other even when strung
@@ -185,11 +185,11 @@ export default class LevelLoader {
       const lastRow = groundRow(rows);
 
       const layerOpts = { rows, groundTopY, cellSize, offsetX, tileStyles, lastRow };
-      // 'ground'/'hazard' — see tileStyleKind's docs on why the literal character alone
+      // 'ground'/'hazard': see tileStyleKind's docs on why the literal character alone
       // isn't enough once a section defines its own variants.
       tiles.push(...buildLayerTiles(grid, { ...layerOpts, includeGroundRow: true, includeKind: true }));
       // Background layer: same row/col → world-space mapping as the foreground grid, but
-      // no ground-baseline concept and no collision — purely a stacked decorative image.
+      // no ground-baseline concept and no collision: purely a stacked decorative image.
       bgTiles.push(...buildLayerTiles(bgGrid, { ...layerOpts, includeGroundRow: false, includeKind: false }));
 
       for (const entity of sectionEntities) {

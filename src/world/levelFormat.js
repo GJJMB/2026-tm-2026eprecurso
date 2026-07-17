@@ -5,38 +5,38 @@
  * A "section" is a fixed-size grid of single-character cells (rows top-to-bottom,
  * cols left-to-right) plus a list of point "entities" (spawn, goal, moving platforms,
  * enemies) that need richer parameters than a single character can hold. The grid's last row
- * is always the ground baseline — every section anchors to it, which is what lets
+ * is always the ground baseline: every section anchors to it, which is what lets
  * sections be strung together left-to-right and still line up vertically.
  *
- * A section carries two parallel grids of the same cols/rows: `grid` (foreground —
- * interactable Ground/Hazard tiles, collidable) and the optional `bgGrid` (background —
+ * A section carries two parallel grids of the same cols/rows: `grid` (foreground:
+ * interactable Ground/Hazard tiles, collidable) and the optional `bgGrid` (background:
  * purely decorative, limited to CELL.BACKGROUND, never collides with anything). They
  * share cell coordinates so a background tile can sit "behind" any foreground cell,
- * painted or empty. Older section files predate `bgGrid` — its absence means "no
+ * painted or empty. Older section files predate `bgGrid`: its absence means "no
  * background tiles" (see LevelLoader.build / editor import, which both default it in).
  *
  * Appearance (color or sprite texture, see assets/images/platform-textures.json) is kept
  * out of the grid/entities' geometry: a moving platform entity may carry its own
  * `{ color, texture }`, while ground/hazard/background tiles are styled per-section via
  * that section's own optional `tileStyles: { G: {...}, H: {...}, B: {...} }` (see
- * LevelLoader.build) — each section defines its own floor/wall/backdrop tileset rather
+ * LevelLoader.build): each section defines its own floor/wall/backdrop tileset rather
  * than sharing one level-wide look, so a hand-built section stays fully self-contained
  * and reusable across levels. A `texture` key always wins over `color` when both are
  * present; neither falls back to the game's built-in default color.
  *
  * A texture'd appearance may also carry `tileMode: 'stretch' | 'repeat' | 'maximise'`
- * (missing/'stretch' is the default — one image stretched across each run/rect, today's
+ * (missing/'stretch' is the default: one image stretched across each run/rect, today's
  * only historical behavior). 'repeat' tiles the sprite at native size instead of
  * stretching it. 'maximise' decomposes that character's whole connected same-tile area
  * (see decomposeMaximizedRegions) into the fewest largest rectangles and stretches each
  * one individually, so a big or oddly-shaped area doesn't badly distort one giant image.
  *
  * A grid isn't limited to the literal characters G/H/B: a section can define extra
- * "variant" characters in tileStyles (anything but `.`) — e.g. a second ground look
- * painted as its own brush in the editor — each with its own `{ color, texture }` and,
+ * "variant" characters in tileStyles (anything but `.`): e.g. a second ground look
+ * painted as its own brush in the editor: each with its own `{ color, texture }` and,
  * for foreground variants, an explicit `kind: 'ground' | 'hazard'` (see tileStyleKind)
  * since the literal character no longer implies it. Because runs are merged by exact
- * character match (see mergeRowRuns), two adjacent variants never blend into one tile —
+ * character match (see mergeRowRuns), two adjacent variants never blend into one tile:
  * each keeps its own appearance without any extra bookkeeping.
  */
 
@@ -48,7 +48,7 @@ export const CELL = {
   EMPTY: '.',
   GROUND: 'G',
   HAZARD: 'H',
-  // Background layer's only paintable tile — the decorative equivalent of Ground.
+  // Background layer's only paintable tile: the decorative equivalent of Ground.
   BACKGROUND: 'B',
 };
 
@@ -68,13 +68,13 @@ export const PATROLLING_ENEMY_TYPES = [ENTITY_TYPES.ENEMY_CRAWLER, ENTITY_TYPES.
 export const DEFAULT_ENEMY_RANGE_COLS = 4;
 
 /** Fallback cell-span for anything sizeable (currently just moving platforms) that omits
- * width/height entirely — see normalizeCellSpan. */
+ * width/height entirely: see normalizeCellSpan. */
 export const DEFAULT_PLATFORM_SPAN_CELLS = 1;
 
 /**
  * Normalizes a cell-span field (a moving platform's widthCells/heightCells) to a positive
  * number, falling back to DEFAULT_PLATFORM_SPAN_CELLS when unset, non-numeric, or
- * non-positive — old data and hand-edited JSON stay safe to load either way.
+ * non-positive: old data and hand-edited JSON stay safe to load either way.
  */
 export function normalizeCellSpan(value) {
   const n = Number(value);
@@ -85,7 +85,7 @@ export function normalizeCellSpan(value) {
  * Whether foreground character `type` behaves as solid ground or a lethal hazard. The two
  * built-in literals (CELL.GROUND/CELL.HAZARD) imply their kind on their own, so every
  * section written before per-tile variants existed keeps working unmodified. Any other
- * character (a variant painted with its own sprite/color — see the editor's Tileset
+ * character (a variant painted with its own sprite/color: see the editor's Tileset
  * panel) must carry an explicit `kind` on its tileStyles entry; a missing/malformed one
  * safely defaults to 'ground' rather than accidentally becoming lethal.
  */
@@ -107,7 +107,7 @@ export function emptyGrid(cols = DEFAULT_COLS, rows = DEFAULT_ROWS) {
 
 /**
  * World-space Y of the top of grid `row`, anchored so the ground row's top always
- * lands on `groundTopY` — independent of how many rows a given section defines above it.
+ * lands on `groundTopY`: independent of how many rows a given section defines above it.
  */
 export function rowToWorldY(row, rows, groundTopY, cellSize = CELL_SIZE) {
   return groundTopY - (groundRow(rows) - row) * cellSize;
@@ -138,7 +138,7 @@ export function mergeRowRuns(rowStr) {
 /** 4-directional flood fill of every cell equal to `type` reachable from (startRow,
  * startCol), marking each visited in `visited` as it goes. Returns the component's
  * bounding box plus a same-sized local boolean mask (true where that cell belongs to the
- * component) — the shape `largestRectangle` below operates on. */
+ * component): the shape `largestRectangle` below operates on. */
 function floodFillComponent(grid, visited, startRow, startCol, type) {
   const rows = grid.length;
   const cols = grid[0].length;
@@ -210,10 +210,10 @@ function largestRectangle(mask) {
 /**
  * Decomposes every connected region (4-directional flood fill, so diagonal touches don't
  * count) of any character in `charsToMaximise` into the fewest largest-area axis-aligned
- * rectangles — greedily carving out the biggest remaining rectangle, then repeating on
+ * rectangles: greedily carving out the biggest remaining rectangle, then repeating on
  * what's left, until the whole region is covered. This is what the editor's "Maximise"
  * sprite tiling mode (see addTileModeField in src/editor/main.js) uses so a big or
- * irregularly-shaped same-tile area — e.g. a 5/4/3-wide staircase — renders as a handful
+ * irregularly-shaped same-tile area: e.g. a 5/4/3-wide staircase: renders as a handful
  * of proportionally-stretched images (a 3x3, a 2x1, a 1x1 for that staircase) instead of
  * one image stretched across the whole bounding box (which would badly distort the
  * sprite) or a plain per-cell repeat.

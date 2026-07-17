@@ -43,12 +43,12 @@ export default class GameScene extends Phaser.Scene {
     const levelKey = (data && data.level) || DEFAULT_LEVEL_KEY;
     this.levelKey = levelKey;
     // A truthy campaignId means this level came from a user-authored, IndexedDB-stored
-    // campaign (see MenuScene.js) rather than the built-in assets/levels/* sequence —
+    // campaign (see MenuScene.js) rather than the built-in assets/levels/* sequence:
     // threaded through so LevelLoader reads/writes the right namespaced cache keys and
     // "Next Level" walks that campaign's own sequence instead of the built-in one.
     this.campaignId = (data && data.campaignId) || null;
     // Lives persist across level transitions via this same scene-start payload (see
-    // _finish/GameOverScene) — a fresh run from the menu never passes `lives`, so it
+    // _finish/GameOverScene): a fresh run from the menu never passes `lives`, so it
     // defaults here; an explicit Restart deliberately omits it too, to reset to a full
     // set rather than carrying over a depleted count.
     this.lives = Number.isFinite(data && data.lives) ? data.lives : DEFAULT_LIVES;
@@ -56,7 +56,7 @@ export default class GameScene extends Phaser.Scene {
     const levelWidth = Math.max(plan.levelWidth, width);
 
     // Sections anchor their ground row to groundTopY (see rowToWorldY), so a section
-    // taller than the viewport has rows whose world Y is negative — above y=0, not below
+    // taller than the viewport has rows whose world Y is negative: above y=0, not below
     // it. Bounds must reach at least that high, or the camera physically cannot scroll up
     // to it regardless of startFollow's vertical lerp below, and physics.world.setBounds
     // would otherwise treat that space as out of the world too. plan.levelHeight is the
@@ -71,7 +71,7 @@ export default class GameScene extends Phaser.Scene {
 
     this.parallax = new ParallaxBackground(this, plan.parallax || levelKey);
 
-    // Resolved (texture-or-color) look for a given tile/platform "id" — see _resolveAppearance.
+    // Resolved (texture-or-color) look for a given tile/platform "id": see _resolveAppearance.
     this._appearanceCache = new Map();
 
     this.platforms = [];
@@ -88,7 +88,7 @@ export default class GameScene extends Phaser.Scene {
     let spawn = { x: 80, y: groundY - 80 };
     let goalPos = { x: levelWidth - 80, yTop: groundTopY };
 
-    // Background layer — purely decorative "ground"-equivalent tiles (levelFormat.js's
+    // Background layer: purely decorative "ground"-equivalent tiles (levelFormat.js's
     // CELL.BACKGROUND / a section's optional bgGrid), drawn behind every foreground object
     // with no physics body: nothing here ever collides with or blocks the player.
     for (const tile of plan.bgTiles) {
@@ -101,8 +101,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // Ground/hazard tiles are styled per-section (see levelFormat.js's docstring) via
-    // that section's own optional tileStyles — LevelLoader already resolved each tile's
-    // `style` (or null) and `kind` ('ground'/'hazard' — not necessarily implied by the
+    // that section's own optional tileStyles: LevelLoader already resolved each tile's
+    // `style` (or null) and `kind` ('ground'/'hazard': not necessarily implied by the
     // literal character once a section defines its own variants) from its owning section,
     // so no per-level lookup is needed here.
     for (const tile of plan.tiles) {
@@ -165,12 +165,12 @@ export default class GameScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.hazards, () => this._loseLife(), undefined, this);
     this.physics.add.overlap(this.player, this.goal, () => this._finish(true), undefined, this);
 
-    // ---- Enemies – placed by the level itself (see levelFormat.js's ENTITY_TYPES) ----
+    // ---- Enemies: placed by the level itself (see levelFormat.js's ENTITY_TYPES) ----
     for (const entity of enemySpawns) {
       this._addEnemy(entity, plan.cellSize);
     }
 
-    // ---- Checkpoints – touching one moves the respawn point forward (see _respawnPlayer) ----
+    // ---- Checkpoints: touching one moves the respawn point forward (see _respawnPlayer) ----
     this.checkpoints = [];
     for (const entity of checkpointSpawns) {
       const checkpoint = new Checkpoint(this, entity.x, entity.y);
@@ -218,7 +218,7 @@ export default class GameScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(10);
 
-    // Temporary "N lives left" banner shown while respawning (see _showCenterMessage) —
+    // Temporary "N lives left" banner shown while respawning (see _showCenterMessage):
     // created once here, hidden (alpha 0) until a death actually triggers it.
     this.centerMessageText = this.add
       .text(width / 2, height / 2, '', { fontSize: '28px', color: '#ffffff', fontStyle: 'bold' })
@@ -256,7 +256,7 @@ export default class GameScene extends Phaser.Scene {
   _handlePlayerEnemyCollision(player, enemy) {
     if (enemy.alive === false) return;
     if (this.time.now < this.invulnerableUntil) return; // just respawned, brief grace period
-    // Only enemies that implement takeDamage/die (currently FalseFriend) can be stomped —
+    // Only enemies that implement takeDamage/die (currently FalseFriend) can be stomped:
     // anything else is simply lethal to touch, from any side.
     const stompable = typeof enemy.takeDamage === 'function';
     const playerBottom = player.y;
@@ -275,7 +275,7 @@ export default class GameScene extends Phaser.Scene {
 
   /**
    * Builds a cache key for _resolveAppearance out of a `base` id (what kind of thing this
-   * is — 'hazard', 'ground-baseline', a moving platform, ...) plus the actual override
+   * is: 'hazard', 'ground-baseline', a moving platform, ...) plus the actual override
    * values in `style`. Folding the override into the key (not just the base id) is what
    * keeps two sections with different tileStyles for the same character from bleeding
    * into each other's cached appearance, while identical styles across sections/tiles
@@ -287,12 +287,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /**
-   * Resolves (once per unique `id`) what to render a tile/platform as — a texture key
+   * Resolves (once per unique `id`) what to render a tile/platform as: a texture key
    * (`texture`, if it names a loaded image) or a fill color (`color`, a CSS hex string or
    * numeric 0xRRGGBB), falling back to `fallbackColor` when neither is given. Cached by
    * `id` so e.g. every ground tile in a level only resolves/parses its style once, not
    * once per tile instance. `tileMode` ('stretch'/'repeat'/'maximise', see
-   * levelFormat.js) rides along unresolved — only _makeAppearanceObject needs it, and only
+   * levelFormat.js) rides along unresolved: only _makeAppearanceObject needs it, and only
    * when a texture is actually in play.
    */
   _resolveAppearance(id, texture, color, fallbackColor, tileMode) {
@@ -313,9 +313,9 @@ export default class GameScene extends Phaser.Scene {
    * Builds a `w`x`h` game object at `x,y` per a resolved appearance. A flat-colored
    * Rectangle if there's no texture. Otherwise: a repeating TileSprite (sprite tiled at
    * its native size, no stretching) when `tileMode === 'repeat'`; a plain stretched-to-fit
-   * Image for everything else — 'stretch' explicitly, and 'maximise' too, since
+   * Image for everything else: 'stretch' explicitly, and 'maximise' too, since
    * LevelLoader has already decomposed a 'maximise' tile into several near-square
-   * rectangles by the time it gets here (see levelFormat.js's decomposeMaximizedRegions) —
+   * rectangles by the time it gets here (see levelFormat.js's decomposeMaximizedRegions):
    * each one just needs to fill its own w×h like any other stretched tile.
    */
   _makeAppearanceObject(x, y, w, h, appearance) {
@@ -418,9 +418,9 @@ export default class GameScene extends Phaser.Scene {
   // ---- lives / respawn ----
 
   /** Called on any death (hazard, pit-fall, lethal enemy touch) instead of finishing the
-   * scene outright — decrements the life count, plays a brief death animation, and either
+   * scene outright: decrements the life count, plays a brief death animation, and either
    * respawns in place afterward (lives left) or falls through to the real Game Over
-   * (none left). `this.dying` guards re-entry while the animation is playing — a hazard
+   * (none left). `this.dying` guards re-entry while the animation is playing: a hazard
    * overlap, for instance, keeps firing every frame the (now motionless) player still
    * touches it. */
   _loseLife() {
@@ -436,7 +436,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   /** Freezes the player (no input, no gravity/velocity) and fades/spins/shrinks it out,
-   * then hands off to `onComplete` once the tween finishes — either a respawn or the real
+   * then hands off to `onComplete` once the tween finishes: either a respawn or the real
    * finish, depending on whether any lives remain (see _loseLife). update() skips
    * player.update() while `this.dying` is true so Stickman's own per-frame draw() (which
    * unconditionally re-applies scale/rotation from its pose) doesn't fight the tween. */
@@ -478,7 +478,7 @@ export default class GameScene extends Phaser.Scene {
     this.livesText.setText(`${this.livesLabel}: ${this.lives}`);
   }
 
-  /** Shows `text` centered on screen, then fades it back out — used for the "N lives
+  /** Shows `text` centered on screen, then fades it back out: used for the "N lives
    * left" banner. `killTweensOf` guards against overlapping banners if death somehow
    * happens again before the previous one finished fading. */
   _showCenterMessage(text) {
@@ -515,7 +515,7 @@ export default class GameScene extends Phaser.Scene {
       const targetIdx = patrol.direction === 1 ? patrol.segmentIndex + 1 : patrol.segmentIndex;
       const target = patrol.waypoints[targetIdx];
       // Dot product of "vector to target" and current velocity flips sign exactly when
-      // the platform reaches/passes the target, regardless of speed or frame timing —
+      // the platform reaches/passes the target, regardless of speed or frame timing:
       // more robust than a fixed distance epsilon at variable delta.
       const dot = (target.x - platform.x) * platform.body.velocity.x + (target.y - platform.y) * platform.body.velocity.y;
       if (dot <= 0) {
@@ -532,7 +532,7 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    // player — skipped while a death animation is playing (see _playDeathAnimation), so
+    // player: skipped while a death animation is playing (see _playDeathAnimation), so
     // Stickman's own draw() doesn't overwrite the tween's scale/rotation every frame.
     if (!this.dying) {
       const left = this.cursors.left.isDown || this.keys.A.isDown;

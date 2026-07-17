@@ -54,8 +54,8 @@ export default class Stickman extends Actor {
 
     // 1 cell wide by 2 cells tall, so the hitbox lines up consistently with the grid
     // regardless of the section's own visual scale.
-    this.body.setSize(CELL_SIZE, CELL_SIZE * 2);
-    this.body.setOffset(-CELL_SIZE / 2, -CELL_SIZE * 2);
+    this.body.setSize(CELL_SIZE, 56);
+    this.body.setOffset(-CELL_SIZE / 2, -56);
     this.body.setCollideWorldBounds(true);
     this.body.setMaxVelocity(MAX_SPEED_X, MAX_SPEED_Y);
     this.body.setDragX(DRAG_X);
@@ -85,7 +85,7 @@ export default class Stickman extends Actor {
     this.draw();
   }
 
-  /** Repositions the player (e.g. to a checkpoint after losing a life — see
+  /** Repositions the player (e.g. to a checkpoint after losing a life: see
    * GameScene._respawnPlayer) and resets every per-life movement/pose field back to its
    * constructor default, so a respawn behaves identically to an initial spawn rather than
    * carrying over jump/wall-slide/lean state from just before the death. */
@@ -333,7 +333,15 @@ export default class Stickman extends Actor {
     // }
 
     // --- Apply transform: scale (facing + squash) and rotation (lean + spin) ---
-    this.setScale(this.facing, squash);
+    // Facing-flip is applied to `gfx` alone, not the container itself: Arcade's Body
+    // reads its offset off the *container's* own scaleX (see Body.updateFromGameObject),
+    // so a negative container scaleX flips the sign of that offset and shoves the hitbox
+    // a full body-width off-center the moment the player faces left. Squash still applies
+    // to the container (it's always positive, so it only resizes the body, never mirrors
+    // it) — combined with gfx's own scale this renders identically to the old single
+    // `this.setScale(facing, squash)` while keeping the body centered either way.
+    this.setScale(1, squash);
+    this.gfx.setScale(this.facing, 1);
     this.setRotation(this.lean);
 
     // --- Pose offsets (scaled vertically by squash) ---

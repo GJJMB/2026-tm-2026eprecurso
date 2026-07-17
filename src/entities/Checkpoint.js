@@ -7,7 +7,7 @@ const POLE_HEIGHT = 50;
 
 /**
  * A flag the player can touch to move their respawn point forward (see
- * GameScene._loseLife/_respawnPlayer) — a static trigger, not an AI actor. Shorter than
+ * GameScene._loseLife/_respawnPlayer): a static trigger, not an AI actor. Shorter than
  * the goal's pole (GameScene._addGoal, 70px) and a different flag color so the two are
  * never confused at a glance; the flag switches from gray to green the moment it's
  * activated and stays that way for the rest of the level attempt.
@@ -26,7 +26,7 @@ export default class Checkpoint extends Actor {
     this.draw();
   }
 
-  /** Idempotent, mirroring FalseFriend's takeDamage/die guard — an overlap fires every
+  /** Idempotent, mirroring FalseFriend's takeDamage/die guard: an overlap fires every
    * frame the player stands on the checkpoint, not just once. */
   activate() {
     if (this.activated) return;

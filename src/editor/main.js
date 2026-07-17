@@ -154,11 +154,11 @@ const DEFAULT_HAZARD_COLOR = '#d1495b';
 const DEFAULT_BACKGROUND_COLOR = '#2e3a4a';
 
 // Extra single-character slots a section can hand out to its own Ground/Hazard/Background
-// variants (see levelFormat.js's tileStyleKind docs) — '.', 'G', 'H', 'B' are reserved, so
+// variants (see levelFormat.js's tileStyleKind docs): '.', 'G', 'H', 'B' are reserved, so
 // this pool is picked from every other easily-typed printable character.
 const VARIANT_CHAR_POOL = '123456789abcdefghijklmnopqrstuvwxyzACDEFIJKLMNOPQRSTUVWXYZ'.split('');
 
-// Must match the .cell width/gap in editor.html's CSS — used to place the SVG path
+// Must match the .cell width/gap in editor.html's CSS: used to place the SVG path
 // overlay's points without needing a DOM measurement round-trip.
 const CELL_PX = 28;
 const GAP_PX = 1;
@@ -189,11 +189,11 @@ function makeBlankState(id, cols, rows) {
     cols,
     rows,
     grid: emptyGrid(cols, rows).map((row) => row.split('')),
-    // Decorative layer, same dimensions as `grid` — see levelFormat.js's bgGrid docs.
+    // Decorative layer, same dimensions as `grid`: see levelFormat.js's bgGrid docs.
     bgGrid: emptyGrid(cols, rows).map((row) => row.split('')),
     entities: [],
     // This section's own floor/wall/backdrop tileset (see levelFormat.js's tileStyles
-    // docs) — each section keeps its own, rather than sharing one level-wide look.
+    // docs): each section keeps its own, rather than sharing one level-wide look.
     tileStyles: {
       [CELL.GROUND]: { color: DEFAULT_GROUND_COLOR },
       [CELL.HAZARD]: { color: DEFAULT_HAZARD_COLOR },
@@ -203,13 +203,13 @@ function makeBlankState(id, cols, rows) {
 }
 
 let state = makeBlankState('new-section', DEFAULT_COLS, DEFAULT_ROWS);
-let currentLayer = 'foreground'; // 'foreground' | 'background' — which grid painting/tools target
+let currentLayer = 'foreground'; // 'foreground' | 'background': which grid painting/tools target
 let currentTool = CELL.GROUND;
 let isPainting = false;
 let paintValue = CELL.GROUND;
 let levelSections = [];
 
-// Which category the Tileset panel's dropdown/list is showing — purely a UI preference,
+// Which category the Tileset panel's dropdown/list is showing: purely a UI preference,
 // independent of currentLayer (e.g. you can browse Hazard's tileset while still painting
 // Ground). The char currently open in the side-modal editor, or null when it's closed.
 let tilesetCategory = 'ground'; // 'ground' | 'hazard' | 'background'
@@ -217,7 +217,7 @@ let tilesetModalChar = null;
 
 // Sprite keys available for the "Sprite" appearance mode, fetched once from
 // assets/images/platform-textures.json (the editor is plain static JS, not a Phaser
-// scene, so it can't use PlatformTextures.js's loader — a plain fetch does the same job).
+// scene, so it can't use PlatformTextures.js's loader: a plain fetch does the same job).
 let textureKeys = [];
 fetch('assets/images/platform-textures.json')
   .then((res) => res.json())
@@ -243,7 +243,7 @@ let placingWaypoint = null; // { entityIndex, waypointIndex } | null
 // variant" hands out one more character from VARIANT_CHAR_POOL, so e.g. a section can
 // paint two visually distinct Ground brushes ('G' and, say, '1') that both behave as
 // solid ground (see levelFormat.js's tileStyleKind). Foreground variants carry an
-// explicit `kind` ('ground'/'hazard'); background variants don't need one — everything
+// explicit `kind` ('ground'/'hazard'); background variants don't need one: everything
 // in bgGrid is decorative by construction.
 
 /** Every non-base character whose tileStyleKind resolves to `kind`, in creation order. */
@@ -253,7 +253,7 @@ function variantCharsOfKind(kind) {
   );
 }
 
-/** Display label for any foreground/background character, base or variant — "Ground",
+/** Display label for any foreground/background character, base or variant: "Ground",
  * "Ground 2", "Hazard 3", "Background 2", etc. */
 function styleLabel(char) {
   if (char === CELL.GROUND) return t('editor.style.ground');
@@ -265,7 +265,7 @@ function styleLabel(char) {
   return `${kindLabel} ${idx + 2}`; // base itself is implicitly "1"
 }
 
-/** Swatch color for any foreground/background character — used by tool buttons, the
+/** Swatch color for any foreground/background character: used by tool buttons, the
  * Platforms/Background lists, and cell fill color. Sprite-only variants (no `color` set)
  * fall back to a neutral placeholder since the editor can't preview actual sprite pixels. */
 function cellSwatchColor(char) {
@@ -296,7 +296,7 @@ function addVariant(kind) {
   openTilesetModal(char);
 }
 
-/** Deletes a variant and clears any cells painted with it back to empty — a dangling
+/** Deletes a variant and clears any cells painted with it back to empty: a dangling
  * character with no tileStyles entry would otherwise render with the '#888' fallback and
  * silently break re-export/re-import round-tripping. */
 function removeVariant(char) {
@@ -348,7 +348,7 @@ const TILESET_DEFAULT_COLOR = { ground: DEFAULT_GROUND_COLOR, hazard: DEFAULT_HA
 
 /**
  * Renders the Tileset panel's type list for whichever category (Ground/Hazard/Background)
- * the dropdown is currently set to — the base type plus any of that kind's variants (see
+ * the dropdown is currently set to: the base type plus any of that kind's variants (see
  * the "Tile variants" section above), each a clickable row that opens the side-modal
  * editor (see openTilesetModal) rather than expanding inline.
  */
@@ -383,14 +383,14 @@ function renderTilesetTypeList() {
 }
 
 /** Thin wrapper kept so existing call sites (loadState, addVariant, removeVariant, import)
- * don't need to know about the list/modal split — also closes the side-modal if it was
+ * don't need to know about the list/modal split: also closes the side-modal if it was
  * open for a character that no longer exists in the (possibly just-reloaded) state. */
 function renderTilesetFields() {
   renderTilesetTypeList();
   if (tilesetModalChar && !state.tileStyles[tilesetModalChar]) closeTilesetModal();
 }
 
-/** Opens the side-modal editor for `char`'s appearance (see editor.html's .side-modal) —
+/** Opens the side-modal editor for `char`'s appearance (see editor.html's .side-modal):
  * used both right after "+ Add variant" creates a new type and when clicking an existing
  * row in the Tileset list. */
 function openTilesetModal(char) {
@@ -421,7 +421,7 @@ function openTilesetModal(char) {
     removeBtn.style.width = '100%';
     removeBtn.style.marginTop = '14px';
     // removeVariant() re-renders the list and (via renderTilesetFields' check above)
-    // closes this modal itself once the char is actually gone — but confirm() inside it
+    // closes this modal itself once the char is actually gone: but confirm() inside it
     // may be cancelled, so this must NOT unconditionally close the modal here too.
     removeBtn.addEventListener('click', () => removeVariant(char));
     els.tilesetModalBody.appendChild(removeBtn);
@@ -463,7 +463,7 @@ function updateCellVisual(row, col) {
   cell.classList.toggle('has-bg-under-fg', fgChar !== CELL.EMPTY && bgChar !== CELL.EMPTY);
 }
 
-/** Re-applies every cell's fill color — needed after a tileStyles color/texture edit,
+/** Re-applies every cell's fill color: needed after a tileStyles color/texture edit,
  * since already-painted cells otherwise keep showing their old color. */
 function refreshGridColors() {
   for (let r = 0; r < state.rows; r++) {
@@ -591,7 +591,7 @@ function refreshPlatformSelection() {
   selection = match ? { kind: 'platform', ...match } : null;
 }
 
-/** Every contiguous background-tile run — the decorative-layer equivalent of getPlatformRuns. */
+/** Every contiguous background-tile run: the decorative-layer equivalent of getPlatformRuns. */
 function getBgRuns() {
   const runs = [];
   for (let row = 0; row < state.rows; row++) {
@@ -793,7 +793,7 @@ function addSegmentSpeedsField(container, entity) {
 }
 
 /** Lets a selected platform/background run be repainted with any Ground/Hazard variant
- * (or, on the background layer, any Background variant) — the run-level equivalent of
+ * (or, on the background layer, any Background variant): the run-level equivalent of
  * picking a tool brush, for reassigning an already-placed run's look after the fact. */
 function addVariantPickerField(container, labelText, currentType, kinds) {
   const wrap = document.createElement('div');
@@ -830,8 +830,8 @@ function setSelectedPlatformType(newType) {
 
 /**
  * A Color/Sprite appearance picker bound to `obj` (a moving platform entity, or one of the
- * current section's tileStyles entries — anything shaped `{ color, texture }`). Switching
- * mode deletes the other field, so exported JSON never carries both at once — texture
+ * current section's tileStyles entries: anything shaped `{ color, texture }`). Switching
+ * mode deletes the other field, so exported JSON never carries both at once: texture
  * always wins over color at runtime (see levelFormat.js) so a stale leftover would
  * otherwise silently do nothing.
  */
@@ -907,7 +907,7 @@ function addAppearanceField(container, labelText, obj, defaultColor, onValueChan
 const TILE_MODE_LABEL_KEYS = { stretch: 'editor.tileMode.stretch', repeat: 'editor.tileMode.repeat', maximise: 'editor.tileMode.maximise' };
 const TILE_MODE_HINT_KEYS = { stretch: 'editor.tileMode.stretchHint', repeat: 'editor.tileMode.repeatHint', maximise: 'editor.tileMode.maximiseHint' };
 
-/** Sprite-only tiling mode picker (Stretch/Repeat/Maximise — see levelFormat.js's
+/** Sprite-only tiling mode picker (Stretch/Repeat/Maximise: see levelFormat.js's
  * decomposeMaximizedRegions for what Maximise actually does). Not shown for Color
  * appearances, which have no texture to stretch/repeat/decompose. Undefined/missing
  * `tileMode` means 'stretch' (today's only behavior, so old sections need no migration);
@@ -1059,8 +1059,8 @@ function renderEntityList() {
     label.className = 'obj-item-label';
     label.textContent =
       entity.type === ENTITY_TYPES.MOVING_PLATFORM
-        ? `${entityLabel(ENTITY_TYPES.MOVING_PLATFORM)} — ${entity.waypoints.length} ${t('editor.entityList.waypointsSuffix')}`
-        : `${entityLabel(entity.type)} — ${t('editor.pos.col')} ${entity.col}, ${t('editor.pos.row')} ${entity.row}`;
+        ? `${entityLabel(ENTITY_TYPES.MOVING_PLATFORM)}: ${entity.waypoints.length} ${t('editor.entityList.waypointsSuffix')}`
+        : `${entityLabel(entity.type)}: ${t('editor.pos.col')} ${entity.col}, ${t('editor.pos.row')} ${entity.row}`;
 
     li.append(swatch, label);
     li.addEventListener('click', () => selectEntity(idx));
@@ -1084,7 +1084,7 @@ function renderPlatformList() {
 
     const label = document.createElement('span');
     label.className = 'obj-item-label';
-    label.textContent = `${styleLabel(run.type)} — ${t('editor.pos.row')} ${run.row}, ${t('editor.pos.cols')} ${run.startCol}-${run.startCol + run.colSpan - 1}`;
+    label.textContent = `${styleLabel(run.type)}: ${t('editor.pos.row')} ${run.row}, ${t('editor.pos.cols')} ${run.startCol}-${run.startCol + run.colSpan - 1}`;
 
     li.append(swatch, label);
     li.addEventListener('click', () => selectPlatform(run));
@@ -1108,7 +1108,7 @@ function renderBgList() {
 
     const label = document.createElement('span');
     label.className = 'obj-item-label';
-    label.textContent = `${styleLabel(run.type)} — ${t('editor.pos.row')} ${run.row}, ${t('editor.pos.cols')} ${run.startCol}-${run.startCol + run.colSpan - 1}`;
+    label.textContent = `${styleLabel(run.type)}: ${t('editor.pos.row')} ${run.row}, ${t('editor.pos.cols')} ${run.startCol}-${run.startCol + run.colSpan - 1}`;
 
     li.append(swatch, label);
     li.addEventListener('click', () => selectBgPlatform(run));
@@ -1135,7 +1135,7 @@ function syncPreview() {
 
 // --- Painting ---
 
-/** Hit-tests a cell against every placed entity — moving platforms match any of their waypoints. */
+/** Hit-tests a cell against every placed entity: moving platforms match any of their waypoints. */
 function findEntityAtCell(row, col) {
   return state.entities.findIndex((en) => {
     if (en.type === ENTITY_TYPES.MOVING_PLATFORM) {
@@ -1156,7 +1156,7 @@ function onCellMouseDown(e) {
     return;
   }
 
-  // Background layer only ever paints (Background/Eraser/variants) — no entities — so it
+  // Background layer only ever paints (Background/Eraser/variants): no entities: so it
   // can't fall through to the entity-placement logic below.
   if (currentLayer === 'background') {
     isPainting = true;
@@ -1165,7 +1165,7 @@ function onCellMouseDown(e) {
     return;
   }
 
-  // Paint tools are single-char cell types (Ground/Hazard/Eraser and any variant — see the
+  // Paint tools are single-char cell types (Ground/Hazard/Eraser and any variant: see the
   // "Tile variants" section above); entity tools are the longer ENTITY_TYPES strings
   // ('playerSpawn', 'movingPlatform', ...), so length alone tells them apart.
   if (currentTool.length === 1) {
@@ -1262,7 +1262,7 @@ function makeToolButton(char, label, color) {
   return btn;
 }
 
-/** Rebuilds the Ground/Hazard/Eraser brush buttons from state.tileStyles — every Ground
+/** Rebuilds the Ground/Hazard/Eraser brush buttons from state.tileStyles: every Ground
  * and Hazard variant (see the "Tile variants" section above) gets its own brush. */
 function renderFgToolButtons() {
   els.fgToolGrid.innerHTML = '';
@@ -1300,7 +1300,7 @@ els.layerBgBtn.addEventListener('click', () => setLayer('background'));
 //
 // Section/Tiles/Entities each get their own top-bar tab (see editor.html's
 // .editor-tab/.tab-panel) so the sidebar only shows the controls relevant to what you're
-// currently doing. Entities are foreground-only (see levelFormat.js's bgGrid docs — the
+// currently doing. Entities are foreground-only (see levelFormat.js's bgGrid docs: the
 // background layer can't hold entities), so switching to the Entities tab also forces the
 // Tiles tab's layer back to Foreground; without that guard, an entity tool selected while
 // the Background layer was still active would get painted straight into bgGrid as a raw
@@ -1346,11 +1346,11 @@ els.newBtn.addEventListener('click', () => {
 // --- Resize (non-destructive) ---
 //
 // Resizing keeps everything that still fits: new columns are added at the right (and
-// removed from the right when shrinking — see MAX_COLS), matching how the grid is
+// removed from the right when shrinking: see MAX_COLS), matching how the grid is
 // addressed left-to-right. Rows instead shift so the ground row (always the grid's last
-// row — see levelFormat.js's docstring) stays anchored at the bottom: new rows are added
+// row: see levelFormat.js's docstring) stays anchored at the bottom: new rows are added
 // above, and shrinking removes from the top. If that shift would push any painted tile or
-// entity outside the new bounds, the resize doesn't happen immediately — the button arms
+// entity outside the new bounds, the resize doesn't happen immediately: the button arms
 // into a red "Confirm?" state listing what would be deleted, and a second click on the
 // same target size actually applies it.
 const MAX_COLS = 256;
@@ -1431,7 +1431,7 @@ function computeResizeImpact(cols, rows) {
 
 /** Applies a resize to `cols`x`rows`, remapping every existing tile/entity per the row
  * shift described above (col 0 always keeps its meaning) and dropping anything that lands
- * outside the new bounds — computeResizeImpact should already have warned about those. */
+ * outside the new bounds: computeResizeImpact should already have warned about those. */
 function applyResize(cols, rows, rowOffset) {
   const remapGrid = (grid) => {
     const result = [];
@@ -1528,7 +1528,7 @@ function importSectionData(data) {
     cols: data.cols,
     rows: data.rows,
     grid: data.grid.map((row) => row.split('')),
-    // Older section files predate bgGrid — default to an empty background layer rather
+    // Older section files predate bgGrid: default to an empty background layer rather
     // than leaving state.bgGrid undefined.
     bgGrid: (data.bgGrid && data.bgGrid.length === data.rows ? data.bgGrid : emptyGrid(data.cols, data.rows)).map((row) =>
       row.split('')
@@ -1640,7 +1640,7 @@ els.exportLevelBtn.addEventListener('click', () => {
 // Additive to the Download/Load-file flow above: sections/levels saved here persist in
 // this browser's IndexedDB (see src/data/db.js) with no manual file step, and can be
 // grouped into a "Campaign" (ordered list of levels) that shows up in the game's main
-// menu. Levels/sections stay globally reusable by id, same as the file-based model —
+// menu. Levels/sections stay globally reusable by id, same as the file-based model:
 // deleting one that's still referenced elsewhere isn't blocked, it just surfaces as a
 // validation error (see refreshValidation below) instead.
 
@@ -1827,7 +1827,7 @@ els.deleteCampaignBtn.addEventListener('click', async () => {
   if (!campaign) return;
   if (!confirm(`${t('editor.confirm.deleteCampaignPrefix')} '${campaign.name}'? ${t('editor.confirm.deleteCampaignSuffix')}`)) return;
   // Unlike sections/levels/campaigns (globally reusable by id), an asset belongs
-  // exclusively to the campaign that owns its keyMap entry — so it doesn't outlive it.
+  // exclusively to the campaign that owns its keyMap entry: so it doesn't outlive it.
   const keyMap = (campaign.assets && campaign.assets.keyMap) || {};
   await Promise.all(Object.values(keyMap).map((systemKey) => deleteAsset(systemKey)));
   await deleteCampaign(campaign.id);
@@ -1844,7 +1844,7 @@ els.deleteCampaignBtn.addEventListener('click', async () => {
 // Unlike sections/levels (global, reused by id across levels/campaigns), assets belong to
 // exactly one campaign: the campaign's own `assets.keyMap` is the sole source of truth for
 // which asset records belong to it (see the deleteCampaignBtn handler above for the
-// cascade-delete this implies). Each entry is `{ [userKey]: systemKey }` — `userKey` is the
+// cascade-delete this implies). Each entry is `{ [userKey]: systemKey }`: `userKey` is the
 // editable display name; `systemKey` is the stable id actually used to store/retrieve the
 // base64 record (see assets.js) and never changes, so renaming never has to move data.
 
@@ -1859,7 +1859,7 @@ function assetsOf(campaign) {
 }
 
 /** Builds one asset row (thumbnail/icon + editable name + delete), shared by both the
- * Images/Sprites and Audio lists — the only thing that differs between them is which
+ * Images/Sprites and Audio lists: the only thing that differs between them is which
  * container it's appended to and how the thumbnail renders (see renderAssetList). */
 function buildAssetRow(userKey, systemKey, asset, keyMap, campaign) {
   const li = document.createElement('li');
@@ -1873,7 +1873,7 @@ function buildAssetRow(userKey, systemKey, asset, keyMap, campaign) {
     img.alt = userKey;
     thumb.appendChild(img);
   } else {
-    // Audio has no meaningful visual thumbnail — a generic note icon stands in for it.
+    // Audio has no meaningful visual thumbnail: a generic note icon stands in for it.
     thumb.classList.add('asset-thumb-audio');
     thumb.textContent = '🎵';
   }
@@ -1914,9 +1914,9 @@ function buildAssetRow(userKey, systemKey, asset, keyMap, campaign) {
   return li;
 }
 
-/** Renders the Assets tab's two always-visible divided lists (Images/Sprites, Audio) —
+/** Renders the Assets tab's two always-visible divided lists (Images/Sprites, Audio):
  * one shared upload button feeds both, routed by each asset's own `kind` (auto-detected
- * from the uploaded file's mime type — see assets.js's validateAssetFile). */
+ * from the uploaded file's mime type: see assets.js's validateAssetFile). */
 async function renderAssetList() {
   els.assetListImage.innerHTML = '';
   els.assetListAudio.innerHTML = '';
@@ -1966,7 +1966,7 @@ els.uploadAssetFile.addEventListener('change', async () => {
   const keyMap = assetsOf(campaign).keyMap;
 
   // Dedupe the default key (the filename, minus its extension) against this campaign's
-  // existing keys — the user can always rename afterward via the name field.
+  // existing keys: the user can always rename afterward via the name field.
   let userKey = file.name.replace(/\.[^.]+$/, '') || file.name;
   if (keyMap[userKey]) {
     let n = 2;
@@ -2027,7 +2027,7 @@ async function refreshValidation() {
 
 async function initLocalLibrary() {
   if (!isIndexedDbAvailable()) {
-    console.warn('IndexedDB is not available — local library/campaign features are disabled.');
+    console.warn('IndexedDB is not available: local library/campaign features are disabled.');
     return;
   }
   try {
@@ -2051,11 +2051,11 @@ async function initLocalLibrary() {
   await refreshValidation();
 }
 
-// --- Localization (flag toggle, top-right of the top bar — see editor.html) ---
+// --- Localization (flag toggle, top-right of the top bar: see editor.html) ---
 //
 // The editor is plain static JS, not a Phaser scene (same reasoning as the
 // platform-textures.json fetch above), so it can't use i18n.js's normal
-// queueLocaleLoads/initLocales pair (those drive off a Phaser scene's load queue/cache) —
+// queueLocaleLoads/initLocales pair (those drive off a Phaser scene's load queue/cache):
 // initLocalesViaFetch() is the fetch-based equivalent for exactly this kind of context.
 // `t`/`getLanguage`/`setLanguage` are otherwise identical to the game's usage, including
 // sharing the same localStorage key, so a language picked in one tab is picked up by the
@@ -2068,7 +2068,7 @@ function syncLangButtons() {
 }
 
 /** Applies the current language to every static piece of markup carrying a data-i18n
- * (textContent) or data-i18n-placeholder (placeholder) attribute — see editor.html. */
+ * (textContent) or data-i18n-placeholder (placeholder) attribute: see editor.html. */
 function applyTranslations() {
   document.querySelectorAll('[data-i18n]').forEach((el) => {
     el.textContent = t(el.dataset.i18n);
@@ -2081,7 +2081,7 @@ function applyTranslations() {
 }
 
 /** Re-renders every panel whose text is built in JS rather than sitting in static HTML
- * (entity/tool labels, tileset names, inspector fields, campaign list, ...) — these don't
+ * (entity/tool labels, tileset names, inspector fields, campaign list, ...): these don't
  * carry data-i18n attributes, so applyTranslations() alone can't refresh them. Only needed
  * after an explicit language switch; on first load, loadState()/initLocalLibrary() below
  * already render everything fresh once the dictionaries are in place. */
@@ -2109,7 +2109,7 @@ els.langPtBtn.addEventListener('click', () => setLang('pt'));
 
 // --- Init ---
 //
-// Locale dictionaries must be fetched before anything renders — otherwise every t() call
+// Locale dictionaries must be fetched before anything renders: otherwise every t() call
 // made while building the initial grid/panels would fall back to raw keys (t()'s
 // no-dictionary-yet fallback) and briefly flash untranslated strings.
 async function init() {

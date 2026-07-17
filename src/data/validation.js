@@ -1,6 +1,6 @@
 import { ENTITY_TYPES } from '../world/levelFormat.js';
 
-/** Sums playerSpawn/goal entities across every section belonging to one level — matches
+/** Sums playerSpawn/goal entities across every section belonging to one level: matches
  * GameScene.js's actual runtime behavior, which scans a level's whole assembled entity
  * list (all its sections concatenated) rather than checking any one section in isolation. */
 export function countSpawnGoal(sectionsArray) {
@@ -16,7 +16,7 @@ export function countSpawnGoal(sectionsArray) {
 }
 
 /**
- * Pure validation over already-fetched data (no I/O here — callers do the IndexedDB
+ * Pure validation over already-fetched data (no I/O here: callers do the IndexedDB
  * `getAll()`s once and pass Maps in). Returns a flat, already-ordered (by campaign, then
  * by the level's position within that campaign) list of
  * `{campaignId, campaignName, levelId, message}` errors covering:
@@ -67,7 +67,7 @@ export function computeAllErrors({ campaigns, levelsById, sectionsById }) {
 }
 
 /** True if `levelId` (within `campaignId`) has at least one error in an already-computed
- * error list — used by the editor's campaign-level-list rows to decide `.level-invalid`. */
+ * error list: used by the editor's campaign-level-list rows to decide `.level-invalid`. */
 export function hasError(errors, campaignId, levelId) {
   return errors.some((e) => e.campaignId === campaignId && e.levelId === levelId);
 }

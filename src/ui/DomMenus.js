@@ -13,7 +13,7 @@ const mmCampaignButtons = document.getElementById('mm-campaign-buttons');
 const mmCampaignEmpty = document.getElementById('mm-campaign-empty');
 const mmEditorLink = document.getElementById('mm-editor-link');
 
-// Which campaign (an IndexedDB-authored, editor-built ordered list of levels — see
+// Which campaign (an IndexedDB-authored, editor-built ordered list of levels: see
 // src/data/db.js) is picked in the main menu, or null for "no campaign" (the built-in
 // game). Reset every time the menu is (re)shown, per design: nothing is selected by
 // default, so Start always falls back to the built-in game unless the player explicitly
@@ -75,7 +75,7 @@ export function showMainMenu({ onStart }) {
     mmLangButtons.appendChild(btn);
   });
 
-  // Nothing is selected by default — reset every time the menu is (re)shown.
+  // Nothing is selected by default: reset every time the menu is (re)shown.
   selectedCampaignId = null;
   mmCampaignButtons.innerHTML = '';
   mmCampaignEmpty.classList.add('hidden');
@@ -128,7 +128,7 @@ export function isPauseMenuVisible() {
 /**
  * Shows the HTML game-over/win overlay and wires its Restart button, plus a Next Level
  * button when `onNext` is given (only possible on a win with a level after this one in
- * assets/levels/levels.json's sequence — see LevelLoader.getNextLevelKey).
+ * assets/levels/levels.json's sequence: see LevelLoader.getNextLevelKey).
  */
 export function showGameOverMenu({ won, onRestart, onNext }) {
   goTitle.textContent = won ? t('gameover.win') : t('gameover.lose');

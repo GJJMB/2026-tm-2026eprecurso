@@ -9,13 +9,13 @@ export default class MenuScene extends Phaser.Scene {
 
   create() {
     // `campaignId` is null for "no campaign selected" (see DomMenus.showMainMenu, reset
-    // every time the menu is shown) — that's today's exact built-in-game behavior,
+    // every time the menu is shown): that's today's exact built-in-game behavior,
     // unchanged. A truthy campaignId means the player picked a user-authored,
     // IndexedDB-stored campaign (see src/data/db.js / the editor's Campaign panel):
     // its levels/sections aren't preloaded like the built-in game's are (BootScene/
     // PreloadScene only ever queue the static assets/levels/* files), so they're fetched
     // from IndexedDB here and seeded directly into Phaser's JSON cache
-    // (cache.json.add — same read-side API LevelLoader already uses via cache.json.get,
+    // (cache.json.add: same read-side API LevelLoader already uses via cache.json.get,
     // just skipping the network load since the data's already in memory) before starting
     // GameScene at the campaign's first level.
     const start = async (campaignId) => {

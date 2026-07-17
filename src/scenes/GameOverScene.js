@@ -16,7 +16,7 @@ export default class GameOverScene extends Phaser.Scene {
   create() {
     const restart = () => {
       hideGameOverMenu();
-      // `lives` deliberately omitted — Restart always starts the level fresh with a full
+      // `lives` deliberately omitted: Restart always starts the level fresh with a full
       // set (see GameScene's default), unlike Next Level below which carries the current
       // count forward.
       this.scene.start('GameScene', { level: this.level, campaignId: this.campaignId });

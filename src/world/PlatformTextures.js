@@ -5,7 +5,7 @@ const IMAGE_BASE_PATH = 'assets/images/';
 /**
  * Optional sprite textures a platform/tile can use instead of a flat color, driven by
  * assets/images/platform-textures.json: { "key": "file.png" }. Adding a texture option is
- * a JSON edit + image drop, not a code change — see levelFormat.js for how entities/tile
+ * a JSON edit + image drop, not a code change: see levelFormat.js for how entities/tile
  * styles reference a texture by this key.
  */
 export default class PlatformTextures {
@@ -24,7 +24,7 @@ export default class PlatformTextures {
     }
   }
 
-  /** Every available texture key — e.g. for populating the editor's sprite picker. */
+  /** Every available texture key: e.g. for populating the editor's sprite picker. */
   static keys(scene) {
     return Object.keys(scene.cache.json.get(MANIFEST_KEY) || {});
   }

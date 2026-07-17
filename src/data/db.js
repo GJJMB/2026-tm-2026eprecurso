@@ -1,15 +1,15 @@
 /**
  * Shared IndexedDB persistence for user-authored content: sections/levels (same shape as
- * the file-based assets/levels/* format — see levelFormat.js), campaigns (an ordered list
+ * the file-based assets/levels/* format: see levelFormat.js), campaigns (an ordered list
  * of level ids, new concept, not backed by any file), and binary assets (images/audio,
- * base64-encoded — see assets.js for validation/encoding). Used by both the editor
+ * base64-encoded: see assets.js for validation/encoding). Used by both the editor
  * (src/editor/main.js, to author/save) and the game runtime (MenuScene/DomMenus, to list
- * and play campaigns) — this file lives outside src/editor/ specifically so both sides can
+ * and play campaigns): this file lives outside src/editor/ specifically so both sides can
  * import it. editor.html and index.html are separate static pages with no shared build
  * step, but same-origin, so they share one browser-local database.
  *
  * Hand-rolled Promise wrapper around raw `indexedDB` rather than a library: this repo has
- * no bundler (see package.json — only devDependency is `serve`), so pulling in an IDB
+ * no bundler (see package.json: only devDependency is `serve`), so pulling in an IDB
  * helper package isn't practical, and raw IDB is small enough to wrap directly.
  */
 
@@ -42,7 +42,7 @@ function openDb() {
     };
     request.onsuccess = () => {
       const db = request.result;
-      // A version bump from another tab can't apply while this connection is still open —
+      // A version bump from another tab can't apply while this connection is still open:
       // closing on notice lets that upgrade proceed instead of hanging indefinitely.
       db.onversionchange = () => db.close();
       resolve(db);
@@ -53,7 +53,7 @@ function openDb() {
 }
 
 /** Every CRUD helper opens its own transaction and resolves/rejects purely from that
- * transaction's own request — IDB auto-commits a transaction once the event loop goes
+ * transaction's own request: IDB auto-commits a transaction once the event loop goes
  * idle between requests, so nothing here ever awaits unrelated work mid-transaction. */
 function runRequest(storeName, mode, fn) {
   return openDb().then(
@@ -101,7 +101,7 @@ export const getAsset = (id) => get('assets', id);
 export const putAsset = (asset) => put('assets', asset);
 export const deleteAsset = (id) => del('assets', id);
 
-/** Auto-generated id for a new campaign — campaigns are named by the user, not id'd like
+/** Auto-generated id for a new campaign: campaigns are named by the user, not id'd like
  * sections/levels (which reuse whatever id the user typed for the section/level itself). */
 export function generateCampaignId() {
   return `campaign-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

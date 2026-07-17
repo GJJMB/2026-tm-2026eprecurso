@@ -21,7 +21,7 @@ export function initLocales(scene) {
 
 /**
  * Fetch-based equivalent of queueLocaleLoads+initLocales, for contexts with no Phaser
- * scene to drive a load — the level editor is a plain static page (see src/editor/main.js,
+ * scene to drive a load: the level editor is a plain static page (see src/editor/main.js,
  * which already fetches assets/images/platform-textures.json directly for the same
  * reason). Same `dictionaries`/`currentLang` state as the game, so language choice is
  * shared across editor and game tabs (same origin, same localStorage key).

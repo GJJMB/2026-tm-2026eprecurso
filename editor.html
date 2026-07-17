@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Stickman Runner — Level Editor</title>
+  <title>Stickman Runner: Level Editor</title>
   <style>
     :root {
       color-scheme: dark;
@@ -364,7 +364,7 @@
       box-shadow: inset 0 -3px 0 rgba(0, 204, 255, 0.35);
     }
     /* Fill color is set inline per-cell in JS (main.js's updateCellVisual), since each
-       section can define several Ground/Hazard/Background variants with their own color —
+       section can define several Ground/Hazard/Background variants with their own color:
        a fixed CSS rule per literal character can't represent that. Foreground wins over
        background when both are painted on the same cell; a background tile hidden behind
        a painted foreground tile still gets a small corner tick as a reminder it's there. */
@@ -795,7 +795,7 @@
         <button id="new-btn" data-i18n="editor.section.newBlankBtn">New blank</button>
       </div>
       <p class="hint" id="resize-warning-hint" data-i18n="editor.section.resizeHint">
-        Resizing keeps your existing grid/entities — new rows are added above (so the
+        Resizing keeps your existing grid/entities: new rows are added above (so the
         ground row stays anchored at the bottom) and new columns at the right. Shrinking
         past painted content deletes it.
       </p>
@@ -901,7 +901,7 @@
       <ul id="campaign-level-list"></ul>
       <p class="hint" data-i18n="editor.campaign.hint">
         Levels here must each have exactly one spawn and one goal, summed across their
-        sections — invalid ones show red. Saved campaigns appear in the game's main menu.
+        sections: invalid ones show red. Saved campaigns appear in the game's main menu.
       </p>
     </div>
 
@@ -912,7 +912,7 @@
         <button id="layer-bg-btn" data-layer="background" data-i18n="editor.tiles.backgroundBtn">Background</button>
       </div>
       <p class="hint" data-i18n="editor.tiles.layerHint">
-        Foreground holds interactable Ground/Hazard tiles and entities — this is what the
+        Foreground holds interactable Ground/Hazard tiles and entities: this is what the
         player collides with. Background holds purely decorative ground-equivalent sprites
         behind the action; it never collides and can't hold entities.
       </p>
@@ -922,7 +922,7 @@
         <div class="tool-grid" id="fg-tool-grid"></div>
         <p class="hint" data-i18n="editor.tiles.fgHint">
           Drag to paint. The highlighted bottom row is the ground baseline every section
-          anchors to. Each brush below is its own sprite/color — add more in the Tileset
+          anchors to. Each brush below is its own sprite/color: add more in the Tileset
           section to paint several distinct-looking Ground/Hazard tiles in one section.
         </p>
       </div>
@@ -967,9 +967,9 @@
         <button class="tool-btn entity-tab" data-tool="checkpoint"><span class="swatch" style="background:#38d9a9"></span><span data-i18n="editor.entities.toolCheckpoint">Checkpoint</span></button>
       </div>
       <p class="hint" data-i18n="editor.entities.hint">
-        Click an empty cell to place the selected entity (Spawn/Goal are singletons —
+        Click an empty cell to place the selected entity (Spawn/Goal are singletons:
         placing a new one moves the old; Moving/enemies allow any number). Already-placed
-        entities and platform tiles are listed in the right sidebar — select one there (or
+        entities and platform tiles are listed in the right sidebar: select one there (or
         click its marker/tile here) to edit its properties. Selecting this tab switches the
         Tiles tab back to the Foreground layer, since entities can't live on the Background
         layer.
@@ -979,7 +979,7 @@
     <div id="tab-assets" class="tab-panel hidden" data-tab-panel="assets">
       <h2 data-i18n="editor.assets.heading">Assets</h2>
       <p class="hint" data-i18n="editor.assets.hint">
-        Assets belong to the campaign selected below in the Campaign panel — uploading one
+        Assets belong to the campaign selected below in the Campaign panel: uploading one
         here bundles it with that campaign, not shared with any other. Kind (image vs.
         audio) is detected automatically from the file you pick.
       </p>
@@ -992,11 +992,11 @@
 
       <h2 data-i18n="editor.assets.imagesHeading">Images / Sprites</h2>
       <ul id="asset-list-image" class="obj-list"></ul>
-      <p class="hint" id="asset-list-image-empty" data-i18n="editor.assets.imagesEmpty">No images yet — upload a PNG/JPEG (≤128KB) file.</p>
+      <p class="hint" id="asset-list-image-empty" data-i18n="editor.assets.imagesEmpty">No images yet: upload a PNG/JPEG (≤128KB) file.</p>
 
       <h2 data-i18n="editor.assets.audioHeading">Audio</h2>
       <ul id="asset-list-audio" class="obj-list"></ul>
-      <p class="hint" id="asset-list-audio-empty" data-i18n="editor.assets.audioEmpty">No audio yet — upload an MP3/OGG (≤1MB) file.</p>
+      <p class="hint" id="asset-list-audio-empty" data-i18n="editor.assets.audioEmpty">No audio yet: upload an MP3/OGG (≤1MB) file.</p>
     </div>
   </div>
 
@@ -1018,15 +1018,15 @@
 
     <h2 data-i18n="editor.entities.heading">Entities</h2>
     <ul id="entity-list" class="obj-list"></ul>
-    <p class="hint" id="entity-list-empty" data-i18n="editor.rightSidebar.entitiesEmpty">None placed yet — use the Entities tools on the left.</p>
+    <p class="hint" id="entity-list-empty" data-i18n="editor.rightSidebar.entitiesEmpty">None placed yet: use the Entities tools on the left.</p>
 
     <h2 data-i18n="editor.rightSidebar.platformsHeading">Platforms</h2>
     <ul id="platform-list" class="obj-list"></ul>
-    <p class="hint" id="platform-list-empty" data-i18n="editor.rightSidebar.platformsEmpty">None placed yet — paint Ground/Hazard on the left.</p>
+    <p class="hint" id="platform-list-empty" data-i18n="editor.rightSidebar.platformsEmpty">None placed yet: paint Ground/Hazard on the left.</p>
 
     <h2 data-i18n="editor.rightSidebar.backgroundHeading">Background</h2>
     <ul id="bg-list" class="obj-list"></ul>
-    <p class="hint" id="bg-list-empty" data-i18n="editor.rightSidebar.backgroundEmpty">None placed yet — switch to the Background layer and paint on the left.</p>
+    <p class="hint" id="bg-list-empty" data-i18n="editor.rightSidebar.backgroundEmpty">None placed yet: switch to the Background layer and paint on the left.</p>
 
     <h2 data-i18n="editor.rightSidebar.selectedHeading">Selected</h2>
     <div id="entity-inspector" class="inspector hidden">
