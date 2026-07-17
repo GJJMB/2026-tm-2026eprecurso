@@ -25,6 +25,7 @@ const config = {
 };
 
 const game = new Phaser.Game(config);
+window.__game = game;
 
 window.addEventListener('resize', () => {
   game.scale.resize(window.innerWidth, window.innerHeight);

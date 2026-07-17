@@ -9,17 +9,18 @@ export default class GameOverScene extends Phaser.Scene {
     this.won = Boolean(data && data.won);
     this.level = data && data.level;
     this.nextLevel = data && data.nextLevel;
+    this.campaignId = (data && data.campaignId) || null;
   }
 
   create() {
     const restart = () => {
       hideGameOverMenu();
-      this.scene.start('GameScene', { level: this.level });
+      this.scene.start('GameScene', { level: this.level, campaignId: this.campaignId });
     };
     const goToNextLevel = this.nextLevel
       ? () => {
           hideGameOverMenu();
-          this.scene.start('GameScene', { level: this.nextLevel });
+          this.scene.start('GameScene', { level: this.nextLevel, campaignId: this.campaignId });
         }
       : null;
 

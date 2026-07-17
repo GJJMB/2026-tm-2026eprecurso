@@ -144,6 +144,48 @@
       color: #fff;
       background: #333344;
     }
+
+    .campaign-row {
+      margin-top: 20px;
+    }
+    .campaign-row span {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #888;
+    }
+    .campaign-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .campaign-btn {
+      padding: 8px 14px;
+      font-size: 13px;
+      border: none;
+      border-radius: 6px;
+      background: #242430;
+      color: #ccc;
+      cursor: pointer;
+      text-align: left;
+    }
+    .campaign-btn.active {
+      color: #fff;
+      background: #333344;
+      box-shadow: inset 0 0 0 1px #4a6cf7;
+    }
+
+    .editor-link {
+      display: inline-block;
+      margin-top: 20px;
+      font-size: 13px;
+      color: #888;
+      text-decoration: none;
+    }
+    .editor-link:hover {
+      color: #ccc;
+      text-decoration: underline;
+    }
   </style>
 </head>
 <body>
@@ -153,10 +195,16 @@
     <div class="panel">
       <h1 id="mm-title"></h1>
       <button id="mm-start" class="btn primary"></button>
+      <div class="campaign-row" id="mm-campaign-row">
+        <span id="mm-campaign-label"></span>
+        <div id="mm-campaign-buttons" class="campaign-buttons"></div>
+        <p class="hint hidden" id="mm-campaign-empty"></p>
+      </div>
       <div class="lang-row">
         <span id="mm-lang-label"></span>
         <div id="mm-lang-buttons" class="lang-buttons"></div>
       </div>
+      <a id="mm-editor-link" class="editor-link" href="editor.html" target="_blank" rel="noopener"></a>
     </div>
   </div>
 

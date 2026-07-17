@@ -40,7 +40,12 @@ export default class GameScene extends Phaser.Scene {
     // groundTopY regardless of screen height.
     const levelKey = (data && data.level) || DEFAULT_LEVEL_KEY;
     this.levelKey = levelKey;
-    const plan = LevelLoader.build(this, levelKey, groundTopY);
+    // A truthy campaignId means this level came from a user-authored, IndexedDB-stored
+    // campaign (see MenuScene.js) rather than the built-in assets/levels/* sequence —
+    // threaded through so LevelLoader reads/writes the right namespaced cache keys and
+    // "Next Level" walks that campaign's own sequence instead of the built-in one.
+    this.campaignId = (data && data.campaignId) || null;
+    const plan = LevelLoader.build(this, levelKey, groundTopY, this.campaignId);
     const levelWidth = Math.max(plan.levelWidth, width);
 
     // Extra headroom below the visible ground so falling into a pit is a real
@@ -358,8 +363,8 @@ export default class GameScene extends Phaser.Scene {
     this.finished = true;
     this.player.setMove(0);
     this.sfx.play(won ? 'win' : 'lose');
-    const nextLevel = won ? LevelLoader.getNextLevelKey(this, this.levelKey) : null;
-    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel });
+    const nextLevel = won ? LevelLoader.getNextLevelKey(this, this.levelKey, this.campaignId) : null;
+    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel, campaignId: this.campaignId });
   }
 
   // ---- update ----

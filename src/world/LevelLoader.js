@@ -59,12 +59,24 @@ const LEVELS_SEQUENCE_PATH = 'assets/levels/levels.json';
 const LEVEL_DEFS_BASE_PATH = 'assets/levels/levels/';
 const SECTIONS_BASE_PATH = 'assets/levels/sections/';
 
-function levelDefCacheKey(id) {
-  return `levelDef:${id}`;
+// `campaignId` namespaces these keys so a user-authored campaign (see src/data/db.js,
+// seeded directly into this cache by MenuScene via cache.json.add — no network load
+// involved) can define level/section ids that collide with the built-in game's without
+// clobbering it, and so two different campaigns can't collide with each other either.
+// Omitted (undefined) keeps today's exact keys, so every existing call site (BootScene,
+// PreloadScene, GameScene's default/no-campaign path) is unaffected.
+export function levelDefCacheKey(id, campaignId) {
+  return campaignId ? `levelDef:${campaignId}:${id}` : `levelDef:${id}`;
 }
 
-function sectionCacheKey(id) {
-  return `section:${id}`;
+export function sectionCacheKey(id, campaignId) {
+  return campaignId ? `section:${campaignId}:${id}` : `section:${id}`;
+}
+
+/** Cache key for a campaign's own ordered level-id sequence (the campaign-scoped
+ * equivalent of LEVELS_SEQUENCE_KEY) — seeded by MenuScene when a campaign is selected. */
+export function campaignManifestCacheKey(campaignId) {
+  return `campaignLevels:${campaignId}`;
 }
 
 /**
@@ -120,10 +132,13 @@ export default class LevelLoader {
     }
   }
 
-  /** The level id that follows `levelKey` in assets/levels/levels.json's sequence, or null if
-   * `levelKey` is last (or not found). Used to offer a "Next Level" action on a win. */
-  static getNextLevelKey(scene, levelKey) {
-    const sequence = scene.cache.json.get(LEVELS_SEQUENCE_KEY) || [];
+  /** The level id that follows `levelKey` in assets/levels/levels.json's sequence (or, when
+   * `campaignId` is given, in that campaign's own level sequence — seeded by MenuScene under
+   * campaignManifestCacheKey), or null if `levelKey` is last (or not found). Used to offer a
+   * "Next Level" action on a win. */
+  static getNextLevelKey(scene, levelKey, campaignId) {
+    const sequenceKey = campaignId ? campaignManifestCacheKey(campaignId) : LEVELS_SEQUENCE_KEY;
+    const sequence = scene.cache.json.get(sequenceKey) || [];
     const idx = sequence.indexOf(levelKey);
     if (idx === -1 || idx === sequence.length - 1) return null;
     return sequence[idx + 1];
@@ -145,8 +160,8 @@ export default class LevelLoader {
    * null), so differently-styled sections never bleed into each other even when strung
    * into the same level.
    */
-  static build(scene, levelKey, groundTopY) {
-    const levelDef = scene.cache.json.get(levelDefCacheKey(levelKey));
+  static build(scene, levelKey, groundTopY, campaignId) {
+    const levelDef = scene.cache.json.get(levelDefCacheKey(levelKey, campaignId));
     if (!levelDef) {
       throw new Error(`LevelLoader: no level definition loaded for "${levelKey}" (expected ${LEVEL_DEFS_BASE_PATH}${levelKey}.json)`);
     }
@@ -159,7 +174,7 @@ export default class LevelLoader {
     let maxRows = 0;
 
     for (const sectionId of levelDef.sections) {
-      const section = scene.cache.json.get(sectionCacheKey(sectionId));
+      const section = scene.cache.json.get(sectionCacheKey(sectionId, campaignId));
       if (!section) {
         console.warn(`LevelLoader: section "${sectionId}" not loaded, skipping`);
         continue;

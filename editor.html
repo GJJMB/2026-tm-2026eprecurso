@@ -18,8 +18,95 @@
     }
     body {
       display: flex;
+      flex-direction: column;
       height: 100vh;
       overflow: hidden;
+    }
+    #app-body {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    #top-bar {
+      flex: none;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: #191924;
+      border-bottom: 1px solid #2c2c3a;
+    }
+    #top-bar-title {
+      font-size: 14px;
+      font-weight: bold;
+      color: #fff;
+    }
+    .notif-wrap {
+      position: relative;
+    }
+    #notif-bell {
+      background: none;
+      font-size: 16px;
+      padding: 6px 8px;
+    }
+    #notif-bell:hover {
+      background: #2c2c3a;
+    }
+    .notif-badge {
+      position: absolute;
+      top: 0;
+      right: 0;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 3px;
+      border-radius: 8px;
+      background: #d1495b;
+      color: #fff;
+      font-size: 10px;
+      line-height: 16px;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .notif-dropdown {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 6px;
+      width: 320px;
+      max-height: 320px;
+      overflow-y: auto;
+      background: #12121a;
+      border: 1px solid #3a3a4a;
+      border-radius: 8px;
+      padding: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      z-index: 50;
+    }
+    .notif-wrap:hover .notif-dropdown,
+    .notif-wrap:focus-within .notif-dropdown {
+      display: block;
+    }
+    #notif-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    #notif-list li {
+      font-size: 11px;
+      color: #ff9a9a;
+      background: #2a1418;
+      border: 1px solid #5c2430;
+      border-radius: 6px;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+    #notif-list li:last-child {
+      margin-bottom: 0;
     }
 
     h1 {
@@ -270,6 +357,37 @@
       padding: 2px 6px;
     }
 
+    #campaign-level-list {
+      list-style: none;
+      margin: 0 0 10px;
+      padding: 0;
+    }
+    #campaign-level-list li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #12121a;
+      border: 1px solid #3a3a4a;
+      border-radius: 6px;
+      padding: 4px 6px;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    #campaign-level-list li span {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    #campaign-level-list button {
+      padding: 2px 6px;
+    }
+    #campaign-level-list li.level-invalid {
+      color: #ff9a9a;
+      background: #2a1418;
+      border-color: #5c2430;
+    }
+
     .hint {
       font-size: 11px;
       color: #777;
@@ -511,9 +629,9 @@
 
     .side-modal {
       position: fixed;
-      top: 0;
+      top: 44px;
       left: 300px;
-      height: 100vh;
+      height: calc(100vh - 44px);
       width: 320px;
       background: #191924;
       border-right: 1px solid #2c2c3a;
@@ -558,6 +676,19 @@
   </style>
 </head>
 <body>
+  <div id="top-bar">
+    <div id="top-bar-title">Level Editor</div>
+    <div class="notif-wrap">
+      <button id="notif-bell" type="button" aria-label="Validation errors">
+        🔔<span id="notif-badge" class="notif-badge hidden">0</span>
+      </button>
+      <div class="notif-dropdown">
+        <p class="hint" id="notif-empty">No errors.</p>
+        <ul id="notif-list"></ul>
+      </div>
+    </div>
+  </div>
+  <div id="app-body">
   <div id="sidebar">
     <h1>Level Editor</h1>
 
@@ -605,6 +736,21 @@
           <button type="button" id="import-section-label-btn">Load section JSON…</button>
           <input type="file" id="import-section-file" accept="application/json" />
         </label>
+      </div>
+
+      <h2>Section library (this browser)</h2>
+      <div class="row">
+        <button id="save-section-btn">Save section to library</button>
+      </div>
+      <div class="row">
+        <div>
+          <label for="load-section-select">Load from library</label>
+          <div style="display:flex; gap:6px;">
+            <select id="load-section-select"></select>
+            <button id="load-section-btn">Load</button>
+            <button id="delete-section-btn" class="danger">Delete</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -709,6 +855,51 @@
       assets/levels/levels/ (as &lt;level id&gt;.json). Then add "&lt;level id&gt;" to the
       sequence array in assets/levels/levels.json (if it isn't there already) to play it in-game.
     </p>
+    <div class="row">
+      <button id="save-level-btn">Save level to library</button>
+    </div>
+    <div class="row">
+      <div>
+        <label for="load-level-select">Load from library</label>
+        <div style="display:flex; gap:6px;">
+          <select id="load-level-select"></select>
+          <button id="load-level-btn">Load</button>
+          <button id="delete-level-btn" class="danger">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <h2>Campaign</h2>
+    <div class="row">
+      <div>
+        <label for="campaign-select">Campaign</label>
+        <select id="campaign-select"></select>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="campaign-name-input">Name / rename selected</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="campaign-name-input" placeholder="Campaign name" />
+          <button id="new-campaign-btn">New</button>
+          <button id="delete-campaign-btn" class="danger">Delete</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="add-level-to-campaign-select">Add level to campaign</label>
+        <div style="display:flex; gap:6px;">
+          <select id="add-level-to-campaign-select"></select>
+          <button id="add-level-to-campaign-btn">Add</button>
+        </div>
+      </div>
+    </div>
+    <ul id="campaign-level-list"></ul>
+    <p class="hint">
+      Levels here must each have exactly one spawn and one goal, summed across their
+      sections — invalid ones show red. Saved campaigns appear in the game's main menu.
+    </p>
   </div>
 
   <div id="main">
@@ -750,6 +941,7 @@
     <p class="hint" id="inspector-empty-hint">
       Click an item above (or a marker/tile on the grid) to view and edit its properties.
     </p>
+  </div>
   </div>
 
   <div id="tileset-modal-backdrop" class="modal-backdrop hidden"></div>

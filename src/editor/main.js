@@ -12,6 +12,22 @@ import {
   mergeRowRuns,
   tileStyleKind,
 } from '../world/levelFormat.js';
+import {
+  isIndexedDbAvailable,
+  getAllSections,
+  getSection,
+  putSection,
+  deleteSection,
+  getAllLevels,
+  getLevel,
+  putLevel,
+  deleteLevel,
+  getAllCampaigns,
+  putCampaign,
+  deleteCampaign,
+  generateCampaignId,
+} from '../data/db.js';
+import { computeAllErrors, hasError } from '../data/validation.js';
 
 const els = {
   sectionId: document.getElementById('section-id'),
@@ -57,6 +73,24 @@ const els = {
   entityListEmpty: document.getElementById('entity-list-empty'),
   platformList: document.getElementById('platform-list'),
   platformListEmpty: document.getElementById('platform-list-empty'),
+  saveSectionBtn: document.getElementById('save-section-btn'),
+  loadSectionSelect: document.getElementById('load-section-select'),
+  loadSectionBtn: document.getElementById('load-section-btn'),
+  deleteSectionBtn: document.getElementById('delete-section-btn'),
+  saveLevelBtn: document.getElementById('save-level-btn'),
+  loadLevelSelect: document.getElementById('load-level-select'),
+  loadLevelBtn: document.getElementById('load-level-btn'),
+  deleteLevelBtn: document.getElementById('delete-level-btn'),
+  campaignSelect: document.getElementById('campaign-select'),
+  campaignNameInput: document.getElementById('campaign-name-input'),
+  newCampaignBtn: document.getElementById('new-campaign-btn'),
+  deleteCampaignBtn: document.getElementById('delete-campaign-btn'),
+  addLevelToCampaignSelect: document.getElementById('add-level-to-campaign-select'),
+  addLevelToCampaignBtn: document.getElementById('add-level-to-campaign-btn'),
+  campaignLevelList: document.getElementById('campaign-level-list'),
+  notifBadge: document.getElementById('notif-badge'),
+  notifList: document.getElementById('notif-list'),
+  notifEmpty: document.getElementById('notif-empty'),
 };
 
 const ENTITY_LABELS = {
@@ -1556,16 +1590,290 @@ els.addSectionBtn.addEventListener('click', () => {
   renderSectionList();
 });
 
-els.exportLevelBtn.addEventListener('click', () => {
+function buildLevelData() {
   const levelId = els.levelId.value.trim() || 'level';
-  const data = {
+  return {
     id: levelId,
     parallax: els.levelParallax.value.trim() || levelId,
     cellSize: CELL_SIZE,
     sections: levelSections,
   };
-  download(`${levelId}.json`, JSON.stringify(data, null, 2) + '\n');
+}
+
+function loadLevelData(data) {
+  els.levelId.value = data.id || 'level';
+  els.levelParallax.value = data.parallax || data.id || 'level';
+  levelSections = Array.isArray(data.sections) ? [...data.sections] : [];
+  renderSectionList();
+}
+
+els.exportLevelBtn.addEventListener('click', () => {
+  const data = buildLevelData();
+  download(`${data.id}.json`, JSON.stringify(data, null, 2) + '\n');
 });
+
+// --- Local library (IndexedDB) ---
+//
+// Additive to the Download/Load-file flow above: sections/levels saved here persist in
+// this browser's IndexedDB (see src/data/db.js) with no manual file step, and can be
+// grouped into a "Campaign" (ordered list of levels) that shows up in the game's main
+// menu. Levels/sections stay globally reusable by id, same as the file-based model —
+// deleting one that's still referenced elsewhere isn't blocked, it just surfaces as a
+// validation error (see refreshValidation below) instead.
+
+let campaigns = [];
+let currentCampaignId = null;
+let currentErrors = [];
+
+async function confirmOverwrite(kind, id, existing) {
+  if (!existing) return true;
+  return confirm(`A ${kind} named '${id}' already exists in your library — overwrite it?`);
+}
+
+function fillSelect(select, ids) {
+  const prev = select.value;
+  select.innerHTML = '';
+  ids.forEach((id) => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.textContent = id;
+    select.appendChild(opt);
+  });
+  if (ids.includes(prev)) select.value = prev;
+}
+
+async function populateSectionSelects() {
+  const sections = await getAllSections();
+  fillSelect(els.loadSectionSelect, sections.map((s) => s.id).sort());
+}
+
+async function populateLevelSelects() {
+  const levels = await getAllLevels();
+  const ids = levels.map((l) => l.id).sort();
+  fillSelect(els.loadLevelSelect, ids);
+  fillSelect(els.addLevelToCampaignSelect, ids);
+}
+
+els.saveSectionBtn.addEventListener('click', async () => {
+  if (!isIndexedDbAvailable()) return alert('IndexedDB is not available in this browser.');
+  const data = exportSection();
+  const existing = await getSection(data.id);
+  if (!(await confirmOverwrite('section', data.id, existing))) return;
+  await putSection(data);
+  await populateSectionSelects();
+  await refreshValidation();
+});
+
+els.loadSectionBtn.addEventListener('click', async () => {
+  const id = els.loadSectionSelect.value;
+  if (!id) return;
+  const data = await getSection(id);
+  if (!data) return alert(`No section named '${id}' in the library.`);
+  importSectionData(data);
+});
+
+els.deleteSectionBtn.addEventListener('click', async () => {
+  const id = els.loadSectionSelect.value;
+  if (!id) return;
+  if (!confirm(`Delete section '${id}' from the library? Levels referencing it will show an error.`)) return;
+  await deleteSection(id);
+  await populateSectionSelects();
+  await refreshValidation();
+});
+
+els.saveLevelBtn.addEventListener('click', async () => {
+  if (!isIndexedDbAvailable()) return alert('IndexedDB is not available in this browser.');
+  const data = buildLevelData();
+  const existing = await getLevel(data.id);
+  if (!(await confirmOverwrite('level', data.id, existing))) return;
+  await putLevel(data);
+  await populateLevelSelects();
+  await refreshValidation();
+});
+
+els.loadLevelBtn.addEventListener('click', async () => {
+  const id = els.loadLevelSelect.value;
+  if (!id) return;
+  const data = await getLevel(id);
+  if (!data) return alert(`No level named '${id}' in the library.`);
+  loadLevelData(data);
+});
+
+els.deleteLevelBtn.addEventListener('click', async () => {
+  const id = els.loadLevelSelect.value;
+  if (!id) return;
+  if (!confirm(`Delete level '${id}' from the library? Campaigns referencing it will show an error.`)) return;
+  await deleteLevel(id);
+  await populateLevelSelects();
+  await refreshValidation();
+});
+
+// --- Campaign panel ---
+
+function renderCampaignSelect() {
+  const prev = currentCampaignId;
+  els.campaignSelect.innerHTML = '';
+  campaigns.forEach((c) => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    els.campaignSelect.appendChild(opt);
+  });
+  currentCampaignId = campaigns.some((c) => c.id === prev) ? prev : campaigns.length ? campaigns[0].id : null;
+  if (currentCampaignId) els.campaignSelect.value = currentCampaignId;
+}
+
+function currentCampaign() {
+  return campaigns.find((c) => c.id === currentCampaignId) || null;
+}
+
+function renderCampaignLevelList() {
+  els.campaignLevelList.innerHTML = '';
+  const campaign = currentCampaign();
+  els.campaignNameInput.value = campaign ? campaign.name : '';
+  if (!campaign) return;
+
+  campaign.levelIds.forEach((id, idx) => {
+    const li = document.createElement('li');
+    if (hasError(currentErrors, campaign.id, id)) li.classList.add('level-invalid');
+
+    const span = document.createElement('span');
+    span.textContent = `${idx + 1}. ${id}`;
+    li.appendChild(span);
+
+    const up = document.createElement('button');
+    up.textContent = '↑';
+    up.addEventListener('click', async () => {
+      if (idx === 0) return;
+      [campaign.levelIds[idx - 1], campaign.levelIds[idx]] = [campaign.levelIds[idx], campaign.levelIds[idx - 1]];
+      await putCampaign(campaign);
+      renderCampaignLevelList();
+    });
+
+    const down = document.createElement('button');
+    down.textContent = '↓';
+    down.addEventListener('click', async () => {
+      if (idx === campaign.levelIds.length - 1) return;
+      [campaign.levelIds[idx + 1], campaign.levelIds[idx]] = [campaign.levelIds[idx], campaign.levelIds[idx + 1]];
+      await putCampaign(campaign);
+      renderCampaignLevelList();
+    });
+
+    const remove = document.createElement('button');
+    remove.textContent = '✕';
+    remove.addEventListener('click', async () => {
+      campaign.levelIds.splice(idx, 1);
+      await putCampaign(campaign);
+      renderCampaignLevelList();
+      await refreshValidation();
+    });
+
+    li.append(up, down, remove);
+    els.campaignLevelList.appendChild(li);
+  });
+}
+
+els.campaignSelect.addEventListener('change', () => {
+  currentCampaignId = els.campaignSelect.value || null;
+  renderCampaignLevelList();
+});
+
+els.newCampaignBtn.addEventListener('click', async () => {
+  const name = els.campaignNameInput.value.trim() || 'New campaign';
+  const campaign = { id: generateCampaignId(), name, levelIds: [] };
+  await putCampaign(campaign);
+  campaigns.push(campaign);
+  currentCampaignId = campaign.id;
+  renderCampaignSelect();
+  renderCampaignLevelList();
+  await refreshValidation();
+});
+
+els.campaignNameInput.addEventListener('change', async () => {
+  const campaign = currentCampaign();
+  if (!campaign) return;
+  campaign.name = els.campaignNameInput.value.trim() || campaign.name;
+  await putCampaign(campaign);
+  renderCampaignSelect();
+});
+
+els.deleteCampaignBtn.addEventListener('click', async () => {
+  const campaign = currentCampaign();
+  if (!campaign) return;
+  if (!confirm(`Delete campaign '${campaign.name}'? This only removes the campaign, not its levels/sections.`)) return;
+  await deleteCampaign(campaign.id);
+  campaigns = campaigns.filter((c) => c.id !== campaign.id);
+  currentCampaignId = null;
+  renderCampaignSelect();
+  renderCampaignLevelList();
+  await refreshValidation();
+});
+
+els.addLevelToCampaignBtn.addEventListener('click', async () => {
+  const campaign = currentCampaign();
+  const id = els.addLevelToCampaignSelect.value;
+  if (!campaign || !id) return;
+  campaign.levelIds.push(id);
+  await putCampaign(campaign);
+  renderCampaignLevelList();
+  await refreshValidation();
+});
+
+// --- Validation / top-bar notifications ---
+
+async function refreshValidation() {
+  try {
+    const [sections, levels, camps] = await Promise.all([getAllSections(), getAllLevels(), getAllCampaigns()]);
+    const sectionsById = new Map(sections.map((s) => [s.id, s]));
+    const levelsById = new Map(levels.map((l) => [l.id, l]));
+    campaigns = camps;
+    currentErrors = computeAllErrors({ campaigns, levelsById, sectionsById });
+  } catch (err) {
+    console.error('Validation refresh failed:', err);
+    currentErrors = [];
+  }
+
+  els.notifBadge.textContent = String(currentErrors.length);
+  els.notifBadge.classList.toggle('hidden', currentErrors.length === 0);
+  els.notifEmpty.classList.toggle('hidden', currentErrors.length > 0);
+  els.notifList.innerHTML = '';
+  currentErrors.forEach((e) => {
+    const li = document.createElement('li');
+    li.textContent = `${e.campaignName} › ${e.levelId}: ${e.message}`;
+    els.notifList.appendChild(li);
+  });
+
+  renderCampaignLevelList();
+}
+
+// --- Local library init ---
+
+async function initLocalLibrary() {
+  if (!isIndexedDbAvailable()) {
+    console.warn('IndexedDB is not available — local library/campaign features are disabled.');
+    return;
+  }
+  try {
+    await populateSectionSelects();
+  } catch (err) {
+    console.error('Failed to load saved sections:', err);
+  }
+  try {
+    await populateLevelSelects();
+  } catch (err) {
+    console.error('Failed to load saved levels:', err);
+  }
+  try {
+    campaigns = await getAllCampaigns();
+    renderCampaignSelect();
+    renderCampaignLevelList();
+  } catch (err) {
+    console.error('Failed to load saved campaigns:', err);
+  }
+  await refreshValidation();
+}
+
+initLocalLibrary();
 
 // --- Init ---
 
