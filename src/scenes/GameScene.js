@@ -306,12 +306,7 @@ export default class GameScene extends Phaser.Scene {
     const enemyTop = enemy.body.y;
     const killZoneBottom = enemyTop + enemy.body.height * STOMP_KILL_ZONE_RATIO;
     const falling = player.body.velocity.y > 0;
-    // A stomp requires a *deliberate* jump, not just having walked off a ledge: `jumping`
-    // only clears on touching real ground (see Stickman's `jumped` docs), never on
-    // bouncing off a stomped enemy, so a chained stomp onto a second enemy still counts.
-    // Falling into an enemy without ever having jumped is always lethal to the player,
-    // even landing square on its head, since that contact was never actually aimed.
-    if (stompable && player.jumping && falling && playerBottom < killZoneBottom) {
+    if (stompable && falling && playerBottom < killZoneBottom) {
       // Stomp → kill enemy, and bounce the player back up by exactly the speed they were
       // falling at (captured before takeDamage/die can touch anything else), leaving
       // horizontal velocity untouched since only Y is ever set here.

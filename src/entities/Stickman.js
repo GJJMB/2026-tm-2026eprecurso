@@ -77,15 +77,6 @@ export default class Stickman extends Actor {
     this.jumpsUsed = 0;
     this.doubleJumpTimer = 0;
 
-    // Whether the player has jumped since last touching real ground (a platform/ground
-    // collider — see the `grounded` getter): only cleared there, deliberately never by
-    // landing on an enemy (there's no collider between player and enemy, only an overlap:
-    // see GameScene._addEnemy), so a stomp bounce keeps this true for a chained stomp onto
-    // a second enemy. Read by GameScene._handlePlayerEnemyCollision to tell a deliberate
-    // jump-then-stomp apart from just walking off a ledge and falling into an enemy, which
-    // should kill the player instead even if the contact point is high on the enemy.
-    this.jumped = false;
-
     // --- Wall jump state ---
     this.wallSide = 0;          // -1 = wall on left, 1 = wall on right, 0 = none
     this.wallCoyoteTimer = 0;
@@ -111,7 +102,6 @@ export default class Stickman extends Actor {
     this.wasGrounded = false;
     this.jumpsUsed = 0;
     this.doubleJumpTimer = 0;
-    this.jumped = false;
     this.wallSide = 0;
     this.wallCoyoteTimer = 0;
     this.wallJumpLockTimer = 0;
@@ -121,13 +111,6 @@ export default class Stickman extends Actor {
 
   get grounded() {
     return this.body.blocked.down || this.body.touching.down;
-  }
-
-  /** Whether the player has jumped since last touching real ground (see `this.jumped`'s
-   * docs in the constructor): read by GameScene to tell a deliberate jump-then-stomp apart
-   * from just walking off a ledge into an enemy. */
-  get jumping() {
-    return this.jumped;
   }
 
   get onWallLeft() {
@@ -162,7 +145,6 @@ export default class Stickman extends Actor {
     if (this.grounded) {
       this.body.setVelocityY(JUMP_VELOCITY);
       this.jumpsUsed = 1;
-      this.jumped = true;
       return true;
     }
 
@@ -173,7 +155,6 @@ export default class Stickman extends Actor {
     if (this.jumpsUsed < MAX_JUMPS) {
       this.body.setVelocityY(DOUBLE_JUMP_VELOCITY);
       this.jumpsUsed++;
-      this.jumped = true;
       //this.doubleJumpTimer = DOUBLE_JUMP_SPIN_DURATION;
       return true;
     }
@@ -191,7 +172,6 @@ export default class Stickman extends Actor {
     this.wallSide = 0;
     this.wallCoyoteTimer = 0;
     this.jumpsUsed = 1; // still leaves one air jump available after a wall jump
-    this.jumped = true;
 
     this.hitTime = HIT_DURATION * 0.5; // small impact squash for feedback
 
@@ -211,7 +191,6 @@ export default class Stickman extends Actor {
 
     if (isGrounded) {
       this.jumpsUsed = 0;
-      this.jumped = false;
       this.wallSide = 0;
       this.wallCoyoteTimer = 0;
     }
