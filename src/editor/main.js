@@ -50,6 +50,10 @@ const els = {
   importLabelBtn: document.getElementById('import-section-label-btn'),
   levelId: document.getElementById('level-id'),
   levelParallax: document.getElementById('level-parallax'),
+  levelMaxTime: document.getElementById('level-max-time'),
+  levelMedalGold: document.getElementById('level-medal-gold'),
+  levelMedalSilver: document.getElementById('level-medal-silver'),
+  levelMedalBronze: document.getElementById('level-medal-bronze'),
   tilesetCategorySelect: document.getElementById('tileset-category'),
   tilesetTypeList: document.getElementById('tileset-type-list'),
   tilesetAddBtn: document.getElementById('tileset-add-btn'),
@@ -1613,19 +1617,40 @@ els.addSectionBtn.addEventListener('click', () => {
   renderSectionList();
 });
 
+/** Reads a numeric time-threshold input (max time or one medal), or undefined if left
+ * blank/non-positive: both buildLevelData and the exported JSON treat "unset" as "this
+ * level doesn't time-limit / doesn't offer this medal" (see GameScene/computeMedal). */
+function readSeconds(input) {
+  const n = Number(input.value);
+  return input.value.trim() !== '' && Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
 function buildLevelData() {
   const levelId = els.levelId.value.trim() || 'level';
+  const medals = {
+    gold: readSeconds(els.levelMedalGold),
+    silver: readSeconds(els.levelMedalSilver),
+    bronze: readSeconds(els.levelMedalBronze),
+  };
+  const hasMedals = medals.gold !== undefined || medals.silver !== undefined || medals.bronze !== undefined;
   return {
     id: levelId,
     parallax: els.levelParallax.value.trim() || levelId,
     cellSize: CELL_SIZE,
     sections: levelSections,
+    maxTimeSeconds: readSeconds(els.levelMaxTime),
+    medals: hasMedals ? medals : undefined,
   };
 }
 
 function loadLevelData(data) {
   els.levelId.value = data.id || 'level';
   els.levelParallax.value = data.parallax || data.id || 'level';
+  els.levelMaxTime.value = Number.isFinite(data.maxTimeSeconds) ? data.maxTimeSeconds : '';
+  const medals = data.medals || {};
+  els.levelMedalGold.value = Number.isFinite(medals.gold) ? medals.gold : '';
+  els.levelMedalSilver.value = Number.isFinite(medals.silver) ? medals.silver : '';
+  els.levelMedalBronze.value = Number.isFinite(medals.bronze) ? medals.bronze : '';
   levelSections = Array.isArray(data.sections) ? [...data.sections] : [];
   renderSectionList();
 }

@@ -46,9 +46,15 @@ const pmClose = document.getElementById('pm-close');
 
 const gameOverMenuEl = document.getElementById('game-over-menu');
 const goTitle = document.getElementById('go-title');
+const goReason = document.getElementById('go-reason');
+const goScore = document.getElementById('go-score');
+const goMedal = document.getElementById('go-medal');
 const goNext = document.getElementById('go-next');
 const goRestart = document.getElementById('go-restart');
+const goLeave = document.getElementById('go-leave');
 const goHint = document.getElementById('go-hint');
+
+const MEDAL_ICON = { gold: '🥇', silver: '🥈', bronze: '🥉' };
 
 /**
  * Shows the HTML main menu and wires its Start button + language switcher + campaign
@@ -128,12 +134,31 @@ export function isPauseMenuVisible() {
 /**
  * Shows the HTML game-over/win overlay and wires its Restart button, plus a Next Level
  * button when `onNext` is given (only possible on a win with a level after this one in
- * assets/levels/levels.json's sequence: see LevelLoader.getNextLevelKey).
+ * assets/levels/levels.json's sequence: see LevelLoader.getNextLevelKey). `reason`
+ * ('lives' | 'time') explains a loss, shown under the title. `medal` ('gold' | 'silver' |
+ * 'bronze' | null/undefined) is only ever set on a win, and only when the level defines
+ * time thresholds (see levelFormat.js's computeMedal) fast enough to earn one. `onLeave`
+ * wires a Leave button shown only on a loss, mirroring the pause menu's (see
+ * showPauseMenu) way back to the main menu.
  */
-export function showGameOverMenu({ won, onRestart, onNext }) {
+export function showGameOverMenu({ won, reason, score, medal, onRestart, onNext, onLeave }) {
   goTitle.textContent = won ? t('gameover.win') : t('gameover.lose');
   goTitle.classList.toggle('win', won);
   goTitle.classList.toggle('lose', !won);
+
+  goReason.classList.toggle('hidden', won);
+  if (!won) goReason.textContent = reason === 'time' ? t('gameover.reason.time') : t('gameover.reason.lives');
+
+  goScore.classList.toggle('hidden', !Number.isFinite(score));
+  if (Number.isFinite(score)) goScore.textContent = `${t('game.score')}: ${score}`;
+
+  const hasMedal = won && Boolean(medal);
+  goMedal.classList.toggle('hidden', !hasMedal);
+  goMedal.classList.remove('medal-gold', 'medal-silver', 'medal-bronze');
+  if (hasMedal) {
+    goMedal.classList.add(`medal-${medal}`);
+    goMedal.textContent = `${MEDAL_ICON[medal] || ''} ${t(`gameover.medal.${medal}`)}`;
+  }
 
   const hasNext = Boolean(onNext);
   goNext.classList.toggle('hidden', !hasNext);
@@ -144,8 +169,12 @@ export function showGameOverMenu({ won, onRestart, onNext }) {
   goRestart.textContent = t('pause.restart');
   goHint.textContent = t('gameover.restart');
 
+  goLeave.classList.toggle('hidden', won);
+  goLeave.textContent = t('pause.leave');
+
   goNext.onclick = hasNext ? () => onNext() : null;
   goRestart.onclick = () => onRestart();
+  goLeave.onclick = () => onLeave();
 
   gameOverMenuEl.classList.remove('hidden');
 }

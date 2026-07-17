@@ -184,17 +184,19 @@ export default class LevelLoader {
    * authored independently still line up when strung together end to end.
    *
    * Returns { parallax, cellSize, levelWidth, levelHeight, tiles, bgTiles, colliders,
-   * entities }, where tiles/bgTiles/colliders/entities are already in world pixel
-   * coordinates: GameScene turns those into actual Phaser game objects (that's the only
-   * part that needs physics/collider wiring). `tiles` is the interactable foreground
-   * layer's appearance (unchanged shape/semantics); `bgTiles` is the purely decorative
-   * background layer (see levelFormat.js's `bgGrid` docs): same shape minus `isGroundRow`,
-   * since background tiles never collide and have no "ground baseline" concept. `colliders`
-   * is the foreground layer's *physics* shape instead: see buildColliderRects, it's merged
-   * independently of (and coarser than) `tiles` since a static body has no per-tile texture
-   * to keep distinct. Each tile also carries its owning section's `style` (that section's
-   * tileStyles entry for the tile's character, or null), so differently-styled sections
-   * never bleed into each other even when strung into the same level.
+   * entities, maxTimeSeconds, medals }, where tiles/bgTiles/colliders/entities are already
+   * in world pixel coordinates: GameScene turns those into actual Phaser game objects
+   * (that's the only part that needs physics/collider wiring). `tiles` is the interactable
+   * foreground layer's appearance (unchanged shape/semantics); `bgTiles` is the purely
+   * decorative background layer (see levelFormat.js's `bgGrid` docs): same shape minus
+   * `isGroundRow`, since background tiles never collide and have no "ground baseline"
+   * concept. `colliders` is the foreground layer's *physics* shape instead: see
+   * buildColliderRects, it's merged independently of (and coarser than) `tiles` since a
+   * static body has no per-tile texture to keep distinct. Each tile also carries its
+   * owning section's `style` (that section's tileStyles entry for the tile's character, or
+   * null), so differently-styled sections never bleed into each other even when strung
+   * into the same level. `maxTimeSeconds`/`medals` are the level def's own optional
+   * authored fields, passed through unchanged (see levelFormat.js's computeMedal).
    */
   static build(scene, levelKey, groundTopY, campaignId) {
     const levelDef = scene.cache.json.get(levelDefCacheKey(levelKey, campaignId));
@@ -263,6 +265,10 @@ export default class LevelLoader {
       bgTiles,
       colliders,
       entities,
+      // Both entirely optional level-authoring fields (see the editor's Level sequence
+      // panel): a level with neither set just never time-limits or medals a run.
+      maxTimeSeconds: levelDef.maxTimeSeconds,
+      medals: levelDef.medals,
     };
   }
 }

@@ -7,11 +7,14 @@ export default class GameOverScene extends Phaser.Scene {
 
   init(data) {
     this.won = Boolean(data && data.won);
+    this.reason = data && data.reason;
     this.level = data && data.level;
     this.nextLevel = data && data.nextLevel;
     this.campaignId = (data && data.campaignId) || null;
     this.lives = data && data.lives;
     this.score = data && data.score;
+    this.elapsedSeconds = data && data.elapsedSeconds;
+    this.medal = data && data.medal;
   }
 
   create() {
@@ -28,8 +31,20 @@ export default class GameOverScene extends Phaser.Scene {
           this.scene.start('GameScene', { level: this.nextLevel, campaignId: this.campaignId, lives: this.lives, score: this.score });
         }
       : null;
+    const leave = () => {
+      hideGameOverMenu();
+      this.scene.start('MenuScene');
+    };
 
-    showGameOverMenu({ won: this.won, onRestart: restart, onNext: goToNextLevel });
+    showGameOverMenu({
+      won: this.won,
+      reason: this.reason,
+      score: this.score,
+      medal: this.medal,
+      onRestart: restart,
+      onNext: goToNextLevel,
+      onLeave: leave,
+    });
     this.input.keyboard.once('keydown-R', restart);
     this.events.once('shutdown', hideGameOverMenu);
   }

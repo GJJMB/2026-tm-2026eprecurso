@@ -6,7 +6,7 @@ import Checkpoint from '../entities/Checkpoint.js';
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
 import LevelLoader from '../world/LevelLoader.js';
-import { ENTITY_TYPES, DEFAULT_ENEMY_RANGE_COLS, normalizeCellSpan } from '../world/levelFormat.js';
+import { ENTITY_TYPES, DEFAULT_ENEMY_RANGE_COLS, normalizeCellSpan, computeMedal } from '../world/levelFormat.js';
 import { t } from '../i18n.js';
 import { showPauseMenu, hidePauseMenu } from '../ui/DomMenus.js';
 
@@ -27,6 +27,11 @@ const DEFAULT_LIVES = 3;
 // overlapping/falling toward a second (e.g. a cluster) would immediately burn a life on the
 // very next frame's overlap check, even though the stomp itself was a kill, not a hit.
 const STOMP_INVULNERABILITY_MS = 600;
+// How far down an enemy's body the "stomp" kill zone reaches, as a fraction of its own
+// height, measured from its top: a fixed few-px margin made a falling player's stomp fail
+// (and instantly kill them instead) the moment they clipped an enemy's side rather than
+// landing dead-center on its very top, which looked like a kill on screen but wasn't one.
+const STOMP_KILL_ZONE_RATIO = 0.7;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -90,6 +95,10 @@ export default class GameScene extends Phaser.Scene {
     this.deathY = height + 150;
     this.invulnerableUntil = 0;
     this.dying = false;
+    // Both entirely optional, level-authored (see the editor's Level sequence panel):
+    // a level defining neither never time-limits or medals a run.
+    this.maxTimeSeconds = Number.isFinite(plan.maxTimeSeconds) ? plan.maxTimeSeconds : null;
+    this.medals = plan.medals || null;
 
     let spawn = { x: 80, y: groundY - 80 };
     let goalPos = { x: levelWidth - 80, yTop: groundTopY };
@@ -277,7 +286,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     this.physics.add.collider(enemy, this.platforms);
-    this.physics.add.collider(this.player, enemy);
+    // Overlap only, never a solid collider: a collider here would physically separate the
+    // two bodies as if the enemy were a platform, which is what let the player rest on top
+    // of enemies and blocked the overlap from ever registering on a side approach.
     this.physics.add.overlap(this.player, enemy, this._handlePlayerEnemyCollision, undefined, this);
     this.enemies.push(enemy);
   }
@@ -293,8 +304,14 @@ export default class GameScene extends Phaser.Scene {
     // 20px circle centered on its origin vs. FalseFriend's 40px body anchored at its feet).
     const playerBottom = player.body.y + player.body.height;
     const enemyTop = enemy.body.y;
+    const killZoneBottom = enemyTop + enemy.body.height * STOMP_KILL_ZONE_RATIO;
     const falling = player.body.velocity.y > 0;
-    if (stompable && falling && playerBottom < enemyTop + 10) {
+    // A stomp requires a *deliberate* jump, not just having walked off a ledge: `jumping`
+    // only clears on touching real ground (see Stickman's `jumped` docs), never on
+    // bouncing off a stomped enemy, so a chained stomp onto a second enemy still counts.
+    // Falling into an enemy without ever having jumped is always lethal to the player,
+    // even landing square on its head, since that contact was never actually aimed.
+    if (stompable && player.jumping && falling && playerBottom < killZoneBottom) {
       // Stomp → kill enemy, and bounce the player back up by exactly the speed they were
       // falling at (captured before takeDamage/die can touch anything else), leaving
       // horizontal velocity untouched since only Y is ever set here.
@@ -476,11 +493,20 @@ export default class GameScene extends Phaser.Scene {
     this.lives--;
     this._updateLivesHud();
     if (this.lives <= 0) {
-      this._playDeathAnimation(() => this._finish(false));
+      this._playDeathAnimation(() => this._finish(false, 'lives'));
       return;
     }
     this._showCenterMessage(`${this.lives} ${t('game.livesLeft')}`);
     this._playDeathAnimation(() => this._respawnPlayer());
+  }
+
+  /** Called from update() once the level's optional `maxTimeSeconds` (see the editor's
+   * Level sequence panel) is reached: an unconditional Game Over regardless of lives
+   * remaining, distinct from _loseLife's hazard/enemy/pit-fall path (see the 'time' reason
+   * threaded through to GameOverScene). */
+  _timeUp() {
+    if (this.finished || this.dying) return;
+    this._playDeathAnimation(() => this._finish(false, 'time'));
   }
 
   /** Freezes the player (no input, no gravity/velocity) and fades/spins/shrinks it out,
@@ -546,13 +572,30 @@ export default class GameScene extends Phaser.Scene {
     });
   }
 
-  _finish(won) {
+  /** `reason` only matters on a loss (see _loseLife/_timeUp): 'lives' (ran out) or 'time'
+   * (hit the level's optional maxTimeSeconds), surfaced on GameOverScene as the "why".
+   * On a win, the medal (if the level defines `medals`: see levelFormat.js's
+   * computeMedal) is derived here from the run's own elapsed time, once, rather than
+   * recomputed on GameOverScene from a raw timestamp. */
+  _finish(won, reason) {
     if (this.finished) return;
     this.finished = true;
     this.player.setMove(0);
     this.sfx.play(won ? 'win' : 'lose');
     const nextLevel = won ? LevelLoader.getNextLevelKey(this, this.levelKey, this.campaignId) : null;
-    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel, campaignId: this.campaignId, lives: this.lives, score: this.score });
+    const elapsedSeconds = this.elapsedMs / 1000;
+    const medal = won ? computeMedal(elapsedSeconds, this.medals) : null;
+    this.scene.start('GameOverScene', {
+      won,
+      reason: won ? null : reason || 'lives',
+      level: this.levelKey,
+      nextLevel,
+      campaignId: this.campaignId,
+      lives: this.lives,
+      score: this.score,
+      elapsedSeconds,
+      medal,
+    });
   }
 
   // ---- update ----
@@ -612,6 +655,16 @@ export default class GameScene extends Phaser.Scene {
 
     // HUD
     this.elapsedMs += delta;
-    this.hudText.setText(`${this.hudLabel}: ${(this.elapsedMs / 1000).toFixed(1)}s`);
+    const elapsedSeconds = this.elapsedMs / 1000;
+    this.hudText.setText(
+      this.maxTimeSeconds
+        ? `${this.hudLabel}: ${elapsedSeconds.toFixed(1)}s / ${this.maxTimeSeconds}s`
+        : `${this.hudLabel}: ${elapsedSeconds.toFixed(1)}s`
+    );
+
+    // level-authored time limit (see the editor's Level sequence panel)
+    if (!this.dying && this.maxTimeSeconds && elapsedSeconds >= this.maxTimeSeconds) {
+      this._timeUp();
+    }
   }
 }

@@ -257,6 +257,23 @@ export function decomposeMaximizedRegions(grid, charsToMaximise) {
   return rects;
 }
 
+/**
+ * Which medal (if any) a run of `elapsedSeconds` earns against a level's own
+ * `medals: { gold, silver, bronze }` thresholds (each a max time in seconds for that
+ * medal, gold being the strictest). `medals` is entirely optional per-level authoring
+ * (see the editor's Level sequence panel): any missing/non-finite threshold is simply
+ * never reachable, so a level can define only e.g. a gold time and leave silver/bronze
+ * unset. Returns 'gold' | 'silver' | 'bronze' | null.
+ */
+export function computeMedal(elapsedSeconds, medals) {
+  if (!medals) return null;
+  const { gold, silver, bronze } = medals;
+  if (Number.isFinite(gold) && elapsedSeconds <= gold) return 'gold';
+  if (Number.isFinite(silver) && elapsedSeconds <= silver) return 'silver';
+  if (Number.isFinite(bronze) && elapsedSeconds <= bronze) return 'bronze';
+  return null;
+}
+
 /** Basic shape check used by both the editor (on import) and the game (defensive). */
 export function isValidSection(section) {
   if (!section || typeof section !== 'object') return false;

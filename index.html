@@ -111,6 +111,30 @@
     #go-title.lose {
       color: #ff5555;
     }
+    .reason {
+      margin: -16px 0 20px;
+      font-size: 14px;
+      color: #bbb;
+    }
+    .score {
+      margin: 0 0 8px;
+      font-size: 16px;
+      color: #ddd;
+    }
+    .medal {
+      margin: 0 0 16px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .medal.medal-gold {
+      color: #ffd700;
+    }
+    .medal.medal-silver {
+      color: #c0c0c0;
+    }
+    .medal.medal-bronze {
+      color: #cd7f32;
+    }
     .hint {
       margin: 4px 0 0;
       font-size: 13px;
@@ -220,8 +244,12 @@
   <div id="game-over-menu" class="overlay hidden">
     <div class="panel">
       <h2 id="go-title"></h2>
+      <p id="go-reason" class="reason hidden"></p>
+      <p id="go-score" class="score hidden"></p>
+      <p id="go-medal" class="medal hidden"></p>
       <button id="go-next" class="btn hidden"></button>
       <button id="go-restart" class="btn"></button>
+      <button id="go-leave" class="btn hidden"></button>
       <p id="go-hint" class="hint"></p>
     </div>
   </div>
