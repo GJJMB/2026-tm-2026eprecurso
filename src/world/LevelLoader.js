@@ -1,4 +1,5 @@
 import {
+  CELL,
   CELL_SIZE,
   ENTITY_TYPES,
   mergeRowRuns,
@@ -52,6 +53,39 @@ function buildLayerTiles(grid, { rows, groundTopY, cellSize, offsetX, tileStyles
   });
 
   return out;
+}
+
+/**
+ * World-space collider rects for a section's foreground `grid`: every connected
+ * same-character region (4-directional, so it merges across row boundaries too) reduced to
+ * the fewest largest axis-aligned rectangles via decomposeMaximizedRegions. That's the exact
+ * merge the 'maximise' sprite tiling mode uses for appearance (see levelFormat.js docs) —
+ * this just runs it physics-side, for every character, regardless of that character's own
+ * tileMode. The two are intentionally decoupled: buildLayerTiles keeps one appearance object
+ * per row-run (or per-maximise-rect) so per-tile textures/colors never bleed into a neighbor
+ * with a different style, but a static collider has no appearance to distort — merging it
+ * fully in both X and Y is strictly better, since it removes the internal seams between
+ * adjacent same-type tile bodies that Arcade Physics can otherwise snag a moving body on,
+ * and shrinks the number of static bodies the world has to sweep each step. Returns
+ * `{ x, y, w, h, kind }[]` (kind: 'ground' | 'hazard'), unordered.
+ */
+function buildColliderRects(grid, { rows, groundTopY, cellSize, offsetX, tileStyles }) {
+  if (grid.length === 0) return [];
+
+  const allChars = new Set();
+  for (const rowStr of grid) {
+    for (const ch of rowStr) {
+      if (ch !== CELL.EMPTY) allChars.add(ch);
+    }
+  }
+
+  return decomposeMaximizedRegions(grid, allChars).map((rect) => ({
+    x: colToWorldX(rect.startCol, offsetX, cellSize),
+    y: rowToWorldY(rect.startRow, rows, groundTopY, cellSize),
+    w: rect.colSpan * cellSize,
+    h: rect.rowSpan * cellSize,
+    kind: tileStyleKind(rect.type, tileStyles),
+  }));
 }
 
 const LEVELS_SEQUENCE_KEY = 'levels';
@@ -149,16 +183,18 @@ export default class LevelLoader {
    * `groundTopY` anchors every section's ground row to the same baseline, so sections
    * authored independently still line up when strung together end to end.
    *
-   * Returns { parallax, cellSize, levelWidth, levelHeight, tiles, bgTiles, entities },
-   * where tiles/bgTiles/entities are already in world pixel coordinates: GameScene turns
-   * those into actual Phaser game objects (that's the only part that needs
-   * physics/collider wiring). `tiles` is the interactable foreground layer (unchanged
-   * shape/semantics); `bgTiles` is the purely decorative background layer (see
-   * levelFormat.js's `bgGrid` docs): same shape minus `isGroundRow`, since background
-   * tiles never collide and have no "ground baseline" concept. Each tile also carries its
-   * owning section's `style` (that section's tileStyles entry for the tile's character, or
-   * null), so differently-styled sections never bleed into each other even when strung
-   * into the same level.
+   * Returns { parallax, cellSize, levelWidth, levelHeight, tiles, bgTiles, colliders,
+   * entities }, where tiles/bgTiles/colliders/entities are already in world pixel
+   * coordinates: GameScene turns those into actual Phaser game objects (that's the only
+   * part that needs physics/collider wiring). `tiles` is the interactable foreground
+   * layer's appearance (unchanged shape/semantics); `bgTiles` is the purely decorative
+   * background layer (see levelFormat.js's `bgGrid` docs): same shape minus `isGroundRow`,
+   * since background tiles never collide and have no "ground baseline" concept. `colliders`
+   * is the foreground layer's *physics* shape instead: see buildColliderRects, it's merged
+   * independently of (and coarser than) `tiles` since a static body has no per-tile texture
+   * to keep distinct. Each tile also carries its owning section's `style` (that section's
+   * tileStyles entry for the tile's character, or null), so differently-styled sections
+   * never bleed into each other even when strung into the same level.
    */
   static build(scene, levelKey, groundTopY, campaignId) {
     const levelDef = scene.cache.json.get(levelDefCacheKey(levelKey, campaignId));
@@ -169,6 +205,7 @@ export default class LevelLoader {
     const cellSize = levelDef.cellSize || CELL_SIZE;
     const tiles = [];
     const bgTiles = [];
+    const colliders = [];
     const entities = [];
     let offsetX = 0;
     let maxRows = 0;
@@ -191,6 +228,7 @@ export default class LevelLoader {
       // Background layer: same row/col → world-space mapping as the foreground grid, but
       // no ground-baseline concept and no collision: purely a stacked decorative image.
       bgTiles.push(...buildLayerTiles(bgGrid, { ...layerOpts, includeGroundRow: false, includeKind: false }));
+      colliders.push(...buildColliderRects(grid, layerOpts));
 
       for (const entity of sectionEntities) {
         if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
@@ -223,6 +261,7 @@ export default class LevelLoader {
       levelHeight: maxRows * cellSize,
       tiles,
       bgTiles,
+      colliders,
       entities,
     };
   }

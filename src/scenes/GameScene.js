@@ -104,7 +104,9 @@ export default class GameScene extends Phaser.Scene {
     // that section's own optional tileStyles: LevelLoader already resolved each tile's
     // `style` (or null) and `kind` ('ground'/'hazard': not necessarily implied by the
     // literal character once a section defines its own variants) from its owning section,
-    // so no per-level lookup is needed here.
+    // so no per-level lookup is needed here. Purely visual: no physics body attached (see
+    // the collider loop right below), so a texture/color never has to distort to cover a
+    // merged collision shape wider than one row-run.
     for (const tile of plan.tiles) {
       const cx = tile.x + tile.w / 2;
       const cy = tile.y + tile.h / 2;
@@ -112,7 +114,7 @@ export default class GameScene extends Phaser.Scene {
       if (tile.kind === 'hazard') {
         const id = this._appearanceId('hazard', style);
         const appearance = this._resolveAppearance(id, style.texture, style.color, HAZARD_COLOR, style.tileMode);
-        this._addHazard(cx, cy, tile.w, tile.h, appearance);
+        this._makeAppearanceObject(cx, cy, tile.w, tile.h, appearance);
       } else {
         // The ground baseline row and any elevated platform share the same style/texture,
         // but keep their own default fallback color when no style is set.
@@ -120,7 +122,22 @@ export default class GameScene extends Phaser.Scene {
         const fallback = tile.isGroundRow ? GROUND_COLOR : PLATFORM_COLOR;
         const id = this._appearanceId(base, style);
         const appearance = this._resolveAppearance(id, style.texture, style.color, fallback, style.tileMode);
-        this._addPlatform(cx, cy, tile.w, tile.h, appearance);
+        this._makeAppearanceObject(cx, cy, tile.w, tile.h, appearance);
+      }
+    }
+
+    // Foreground colliders: same source grid as the tiles above, but merged in both X and Y
+    // into the fewest largest static bodies (see LevelLoader.buildColliderRects) instead of
+    // one body per row-run. Kept as invisible zones, entirely separate from the tile
+    // appearance objects above, since collision shape and visual shape no longer match
+    // 1:1 once same-type tiles merge across row boundaries.
+    for (const collider of plan.colliders) {
+      const cx = collider.x + collider.w / 2;
+      const cy = collider.y + collider.h / 2;
+      if (collider.kind === 'hazard') {
+        this._addHazardCollider(cx, cy, collider.w, collider.h);
+      } else {
+        this._addPlatformCollider(cx, cy, collider.w, collider.h);
       }
     }
 
@@ -330,11 +347,25 @@ export default class GameScene extends Phaser.Scene {
     return this.add.rectangle(x, y, w, h, appearance.color);
   }
 
-  _addPlatform(x, y, w, h, appearance) {
-    const rect = this._makeAppearanceObject(x, y, w, h, appearance);
-    this.physics.add.existing(rect, true);
-    this.platforms.push(rect);
-    return rect;
+  /**
+   * Invisible static body for a merged run of foreground ground tiles (see
+   * LevelLoader.buildColliderRects): a `Zone` rather than a Rectangle since this is
+   * collision-only, no fill/texture of its own — the tile appearance layer already drew
+   * whatever's visible at this position.
+   */
+  _addPlatformCollider(x, y, w, h) {
+    const zone = this.add.zone(x, y, w, h);
+    this.physics.add.existing(zone, true);
+    this.platforms.push(zone);
+    return zone;
+  }
+
+  /** Same as _addPlatformCollider, but for a merged run of hazard tiles. */
+  _addHazardCollider(x, y, w, h) {
+    const zone = this.add.zone(x, y, w, h);
+    this.physics.add.existing(zone, true);
+    this.hazards.push(zone);
+    return zone;
   }
 
   /**
@@ -367,13 +398,6 @@ export default class GameScene extends Phaser.Scene {
     const dy = to.y - from.y;
     const dist = Math.hypot(dx, dy) || 1;
     platform.body.setVelocity((dx / dist) * speed, (dy / dist) * speed);
-  }
-
-  _addHazard(x, y, w, h, appearance) {
-    const rect = this._makeAppearanceObject(x, y, w, h, appearance);
-    this.physics.add.existing(rect, true);
-    this.hazards.push(rect);
-    return rect;
   }
 
   _addGoal(x, groundTopY) {
