@@ -2,6 +2,7 @@ import Stickman from '../entities/Stickman.js';
 import FalseFriend from '../entities/FalseFriend.js';
 import Crawler from '../entities/Crawler.js';
 import VomitSeagull from '../entities/VomitSeagull.js';
+import Checkpoint from '../entities/Checkpoint.js';
 import SoundManager from '../audio/SoundManager.js';
 import ParallaxBackground from '../world/ParallaxBackground.js';
 import LevelLoader from '../world/LevelLoader.js';
@@ -21,6 +22,7 @@ const BACKGROUND_COLOR = 0x2e3a4a;
 const BACKGROUND_DEPTH = -5;
 
 const DEFAULT_LEVEL_KEY = 'level1';
+const DEFAULT_LIVES = 3;
 
 export default class GameScene extends Phaser.Scene {
   constructor() {
@@ -45,14 +47,27 @@ export default class GameScene extends Phaser.Scene {
     // threaded through so LevelLoader reads/writes the right namespaced cache keys and
     // "Next Level" walks that campaign's own sequence instead of the built-in one.
     this.campaignId = (data && data.campaignId) || null;
+    // Lives persist across level transitions via this same scene-start payload (see
+    // _finish/GameOverScene) — a fresh run from the menu never passes `lives`, so it
+    // defaults here; an explicit Restart deliberately omits it too, to reset to a full
+    // set rather than carrying over a depleted count.
+    this.lives = Number.isFinite(data && data.lives) ? data.lives : DEFAULT_LIVES;
     const plan = LevelLoader.build(this, levelKey, groundTopY, this.campaignId);
     const levelWidth = Math.max(plan.levelWidth, width);
 
+    // Sections anchor their ground row to groundTopY (see rowToWorldY), so a section
+    // taller than the viewport has rows whose world Y is negative — above y=0, not below
+    // it. Bounds must reach at least that high, or the camera physically cannot scroll up
+    // to it regardless of startFollow's vertical lerp below, and physics.world.setBounds
+    // would otherwise treat that space as out of the world too. plan.levelHeight is the
+    // tallest section's row-count-derived height, so this reaches every section's top row.
+    const worldTop = Math.min(0, groundTopY - plan.levelHeight - plan.cellSize);
     // Extra headroom below the visible ground so falling into a pit is a real
     // fall (camera just won't follow that far down) rather than an instant stop
     // against the world bounds.
-    this.physics.world.setBounds(0, 0, levelWidth, height + 400);
-    this.cameras.main.setBounds(0, 0, levelWidth, height);
+    const worldBottom = height + 400;
+    this.physics.world.setBounds(0, worldTop, levelWidth, worldBottom - worldTop);
+    this.cameras.main.setBounds(0, worldTop, levelWidth, worldBottom - worldTop);
 
     this.parallax = new ParallaxBackground(this, plan.parallax || levelKey);
 
@@ -67,6 +82,8 @@ export default class GameScene extends Phaser.Scene {
     this.paused = false;
     this.elapsedMs = 0;
     this.deathY = height + 150;
+    this.invulnerableUntil = 0;
+    this.dying = false;
 
     let spawn = { x: 80, y: groundY - 80 };
     let goalPos = { x: levelWidth - 80, yTop: groundTopY };
@@ -107,9 +124,10 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    // Enemies to spawn once the player/platforms exist below, so their colliders/overlaps
-    // can be wired up immediately instead of patched in afterwards.
+    // Enemies/checkpoints to spawn once the player/platforms exist below, so their
+    // colliders/overlaps can be wired up immediately instead of patched in afterwards.
     const enemySpawns = [];
+    const checkpointSpawns = [];
 
     for (const entity of plan.entities) {
       if (entity.type === ENTITY_TYPES.PLAYER_SPAWN) {
@@ -128,6 +146,8 @@ export default class GameScene extends Phaser.Scene {
         entity.type === ENTITY_TYPES.ENEMY_VOMIT_SEAGULL
       ) {
         enemySpawns.push(entity);
+      } else if (entity.type === ENTITY_TYPES.CHECKPOINT) {
+        checkpointSpawns.push(entity);
       }
     }
 
@@ -136,14 +156,35 @@ export default class GameScene extends Phaser.Scene {
     // ---- Sound ----
     this.sfx = new SoundManager(this);
 
+    // The default respawn target when no checkpoint has been touched yet (or the level
+    // defines none at all) is simply the level's own spawn point.
+    this.currentCheckpoint = spawn;
+
     this.player = new Stickman(this, spawn.x, spawn.y);
     this.physics.add.collider(this.player, this.platforms);
-    this.physics.add.overlap(this.player, this.hazards, () => this._finish(false), undefined, this);
+    this.physics.add.overlap(this.player, this.hazards, () => this._loseLife(), undefined, this);
     this.physics.add.overlap(this.player, this.goal, () => this._finish(true), undefined, this);
 
     // ---- Enemies – placed by the level itself (see levelFormat.js's ENTITY_TYPES) ----
     for (const entity of enemySpawns) {
       this._addEnemy(entity, plan.cellSize);
+    }
+
+    // ---- Checkpoints – touching one moves the respawn point forward (see _respawnPlayer) ----
+    this.checkpoints = [];
+    for (const entity of checkpointSpawns) {
+      const checkpoint = new Checkpoint(this, entity.x, entity.y);
+      this.physics.add.overlap(
+        this.player,
+        checkpoint,
+        () => {
+          checkpoint.activate();
+          this.currentCheckpoint = { x: checkpoint.x, y: checkpoint.y };
+        },
+        undefined,
+        this
+      );
+      this.checkpoints.push(checkpoint);
     }
 
     // ---- Camera & controls ----
@@ -170,6 +211,21 @@ export default class GameScene extends Phaser.Scene {
       .text(16, 16, `${this.hudLabel}: 0.0s`, { fontSize: '16px', color: '#ffffff' })
       .setScrollFactor(0)
       .setDepth(10);
+
+    this.livesLabel = t('game.lives');
+    this.livesText = this.add
+      .text(16, 40, `${this.livesLabel}: ${this.lives}`, { fontSize: '16px', color: '#ffffff' })
+      .setScrollFactor(0)
+      .setDepth(10);
+
+    // Temporary "N lives left" banner shown while respawning (see _showCenterMessage) —
+    // created once here, hidden (alpha 0) until a death actually triggers it.
+    this.centerMessageText = this.add
+      .text(width / 2, height / 2, '', { fontSize: '28px', color: '#ffffff', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setScrollFactor(0)
+      .setDepth(20)
+      .setAlpha(0);
   }
 
   /**
@@ -199,6 +255,7 @@ export default class GameScene extends Phaser.Scene {
 
   _handlePlayerEnemyCollision(player, enemy) {
     if (enemy.alive === false) return;
+    if (this.time.now < this.invulnerableUntil) return; // just respawned, brief grace period
     // Only enemies that implement takeDamage/die (currently FalseFriend) can be stomped —
     // anything else is simply lethal to touch, from any side.
     const stompable = typeof enemy.takeDamage === 'function';
@@ -210,7 +267,7 @@ export default class GameScene extends Phaser.Scene {
       player.body.setVelocityY(-300);
       this.sfx.play('jump');
     } else {
-      this._finish(false);
+      this._loseLife();
     }
   }
 
@@ -358,13 +415,92 @@ export default class GameScene extends Phaser.Scene {
     this.input.keyboard.resetKeys();
   }
 
+  // ---- lives / respawn ----
+
+  /** Called on any death (hazard, pit-fall, lethal enemy touch) instead of finishing the
+   * scene outright — decrements the life count, plays a brief death animation, and either
+   * respawns in place afterward (lives left) or falls through to the real Game Over
+   * (none left). `this.dying` guards re-entry while the animation is playing — a hazard
+   * overlap, for instance, keeps firing every frame the (now motionless) player still
+   * touches it. */
+  _loseLife() {
+    if (this.finished || this.dying || this.time.now < this.invulnerableUntil) return;
+    this.lives--;
+    this._updateLivesHud();
+    if (this.lives <= 0) {
+      this._playDeathAnimation(() => this._finish(false));
+      return;
+    }
+    this._showCenterMessage(`${this.lives} ${t('game.livesLeft')}`);
+    this._playDeathAnimation(() => this._respawnPlayer());
+  }
+
+  /** Freezes the player (no input, no gravity/velocity) and fades/spins/shrinks it out,
+   * then hands off to `onComplete` once the tween finishes — either a respawn or the real
+   * finish, depending on whether any lives remain (see _loseLife). update() skips
+   * player.update() while `this.dying` is true so Stickman's own per-frame draw() (which
+   * unconditionally re-applies scale/rotation from its pose) doesn't fight the tween. */
+  _playDeathAnimation(onComplete) {
+    this.dying = true;
+    this.player.setMove(0);
+    this.player.body.setVelocity(0, 0);
+    this.player.body.setAllowGravity(false);
+    this.tweens.add({
+      targets: this.player,
+      alpha: 0,
+      angle: 180,
+      scale: 0.3,
+      duration: 450,
+      ease: 'Cubic.easeIn',
+      onComplete: () => {
+        this.player.setAlpha(1);
+        this.player.setAngle(0);
+        this.player.setScale(1);
+        this.player.body.setAllowGravity(true);
+        this.dying = false;
+        onComplete();
+      },
+    });
+  }
+
+  _respawnPlayer() {
+    const { x, y } = this.currentCheckpoint;
+    this.player.respawn(x, y);
+    // Snap instantly rather than letting startFollow's lerp slowly pan the camera all the
+    // way back across the level to the checkpoint, which would look broken.
+    this.cameras.main.centerOn(x, y);
+    // Brief grace period so the overlap that just killed the player (or one right at the
+    // checkpoint itself) can't immediately burn a second life the same/next frame.
+    this.invulnerableUntil = this.time.now + 1000;
+  }
+
+  _updateLivesHud() {
+    this.livesText.setText(`${this.livesLabel}: ${this.lives}`);
+  }
+
+  /** Shows `text` centered on screen, then fades it back out — used for the "N lives
+   * left" banner. `killTweensOf` guards against overlapping banners if death somehow
+   * happens again before the previous one finished fading. */
+  _showCenterMessage(text) {
+    this.tweens.killTweensOf(this.centerMessageText);
+    this.centerMessageText.setText(text);
+    this.centerMessageText.setAlpha(1);
+    this.tweens.add({
+      targets: this.centerMessageText,
+      alpha: 0,
+      delay: 900,
+      duration: 400,
+      ease: 'Cubic.easeOut',
+    });
+  }
+
   _finish(won) {
     if (this.finished) return;
     this.finished = true;
     this.player.setMove(0);
     this.sfx.play(won ? 'win' : 'lose');
     const nextLevel = won ? LevelLoader.getNextLevelKey(this, this.levelKey, this.campaignId) : null;
-    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel, campaignId: this.campaignId });
+    this.scene.start('GameOverScene', { won, level: this.levelKey, nextLevel, campaignId: this.campaignId, lives: this.lives });
   }
 
   // ---- update ----
@@ -396,17 +532,20 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
-    // player
-    const left = this.cursors.left.isDown || this.keys.A.isDown;
-    const right = this.cursors.right.isDown || this.keys.D.isDown;
-    const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
-    let dir = 0;
-    if (left && !right) dir = -1;
-    else if (right && !left) dir = 1;
+    // player — skipped while a death animation is playing (see _playDeathAnimation), so
+    // Stickman's own draw() doesn't overwrite the tween's scale/rotation every frame.
+    if (!this.dying) {
+      const left = this.cursors.left.isDown || this.keys.A.isDown;
+      const right = this.cursors.right.isDown || this.keys.D.isDown;
+      const jump = Phaser.Input.Keyboard.JustDown(this.cursors.up) || Phaser.Input.Keyboard.JustDown(this.keys.SPACE);
+      let dir = 0;
+      if (left && !right) dir = -1;
+      else if (right && !left) dir = 1;
 
-    this.player.setMove(dir);
-    if (jump && this.player.jump()) this.sfx.play('jump');
-    this.player.update(time, delta);
+      this.player.setMove(dir);
+      if (jump && this.player.jump()) this.sfx.play('jump');
+      this.player.update(time, delta);
+    }
 
     // enemies
     for (const enemy of this.enemies) {
@@ -414,8 +553,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // death
-    if (this.player.y > this.deathY) {
-      this._finish(false);
+    if (!this.dying && this.player.y > this.deathY) {
+      this._loseLife();
       return;
     }
 

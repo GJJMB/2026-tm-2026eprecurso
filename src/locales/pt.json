@@ -7,6 +7,8 @@
   "menu.editorLink": "Editor de Níveis ↗",
   "game.instructions": "Setas / A-D para mover, Cima ou Espaço para saltar",
   "game.time": "Tempo",
+  "game.lives": "Vidas",
+  "game.livesLeft": "vidas restantes",
   "pause.title": "Pausa",
   "pause.restart": "Reiniciar",
   "pause.leave": "Sair",

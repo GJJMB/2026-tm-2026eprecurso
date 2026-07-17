@@ -1,4 +1,5 @@
 import Actor from './Actor.js';
+import { CELL_SIZE } from '../world/levelFormat.js';
 
 const LIMB_COLOR = 0x1a1a2a;        // dark base
 const GLOW_COLOR = 0x00ccff;        // neon cyan glow
@@ -20,9 +21,9 @@ const IDLE_LEG_STANCE = Phaser.Math.DegToRad(7);
 const IDLE_ARM_STANCE = Phaser.Math.DegToRad(14);
 const GAIT_SPEED_FOR_FULL_CYCLE = 220;
 
-const MOVE_ACCEL = 900;
-const MAX_SPEED_X = 260;
-const MAX_SPEED_Y = 900;
+const MOVE_ACCEL = 560;
+const MAX_SPEED_X = 580;
+const MAX_SPEED_Y = 1000;
 const DRAG_X = 1400;
 const JUMP_VELOCITY = -480;
 
@@ -51,8 +52,10 @@ export default class Stickman extends Actor {
   constructor(scene, x, y) {
     super(scene, x, y);
 
-    this.body.setSize(24, 60);
-    this.body.setOffset(-12, -60);
+    // 1 cell wide by 2 cells tall, so the hitbox lines up consistently with the grid
+    // regardless of the section's own visual scale.
+    this.body.setSize(CELL_SIZE, CELL_SIZE * 2);
+    this.body.setOffset(-CELL_SIZE / 2, -CELL_SIZE * 2);
     this.body.setCollideWorldBounds(true);
     this.body.setMaxVelocity(MAX_SPEED_X, MAX_SPEED_Y);
     this.body.setDragX(DRAG_X);
@@ -76,6 +79,30 @@ export default class Stickman extends Actor {
 
     // --- Wall jump state ---
     this.wallSide = 0;          // -1 = wall on left, 1 = wall on right, 0 = none
+    this.wallCoyoteTimer = 0;
+    this.wallJumpLockTimer = 0;
+
+    this.draw();
+  }
+
+  /** Repositions the player (e.g. to a checkpoint after losing a life — see
+   * GameScene._respawnPlayer) and resets every per-life movement/pose field back to its
+   * constructor default, so a respawn behaves identically to an initial spawn rather than
+   * carrying over jump/wall-slide/lean state from just before the death. */
+  respawn(x, y) {
+    this.body.reset(x, y);
+    this.body.setAcceleration(0, 0);
+
+    this.facing = 1;
+    this.gaitPhase = 0;
+    this.idlePhase = 0;
+    this.pose = { leftLeg: 0, rightLeg: 0, leftArm: 0, rightArm: 0, bob: 0 };
+    this.lean = 0;
+    this.hitTime = 0;
+    this.wasGrounded = false;
+    this.jumpsUsed = 0;
+    this.doubleJumpTimer = 0;
+    this.wallSide = 0;
     this.wallCoyoteTimer = 0;
     this.wallJumpLockTimer = 0;
 
@@ -128,7 +155,7 @@ export default class Stickman extends Actor {
     if (this.jumpsUsed < MAX_JUMPS) {
       this.body.setVelocityY(DOUBLE_JUMP_VELOCITY);
       this.jumpsUsed++;
-      this.doubleJumpTimer = DOUBLE_JUMP_SPIN_DURATION;
+      //this.doubleJumpTimer = DOUBLE_JUMP_SPIN_DURATION;
       return true;
     }
 
@@ -298,16 +325,16 @@ export default class Stickman extends Actor {
     }
     const squash = 1 - hitIntensity * SQUASH_FACTOR;
 
-    // --- Double jump spin: full rotation that eases out over the flip duration ---
-    let spinRotation = 0;
-    if (this.doubleJumpTimer > 0) {
-      const spinProgress = 1 - (this.doubleJumpTimer / DOUBLE_JUMP_SPIN_DURATION);
-      spinRotation = DOUBLE_JUMP_SPIN_AMOUNT * spinProgress * this.facing;
-    }
+    // // --- Double jump spin: full rotation that eases out over the flip duration ---
+    // let spinRotation = 0;
+    // if (this.doubleJumpTimer > 0) {
+    //   const spinProgress = 1 - (this.doubleJumpTimer / DOUBLE_JUMP_SPIN_DURATION);
+    //   spinRotation = DOUBLE_JUMP_SPIN_AMOUNT * spinProgress * this.facing;
+    // }
 
     // --- Apply transform: scale (facing + squash) and rotation (lean + spin) ---
     this.setScale(this.facing, squash);
-    this.setRotation(this.lean + spinRotation);
+    this.setRotation(this.lean);
 
     // --- Pose offsets (scaled vertically by squash) ---
     const bob = this.pose.bob || 0;

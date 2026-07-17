@@ -59,6 +59,7 @@ export const ENTITY_TYPES = {
   ENEMY_FALSE_FRIEND: 'enemyFalseFriend',
   ENEMY_CRAWLER: 'enemyCrawler',
   ENEMY_VOMIT_SEAGULL: 'enemyVomitSeagull',
+  CHECKPOINT: 'checkpoint',
 };
 
 /** Enemy entity types that patrol a bounded range around their spawn point (col ± rangeCols). */
