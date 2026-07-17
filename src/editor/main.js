@@ -795,6 +795,7 @@ function addAppearanceField(container, labelText, obj, defaultColor, onValueChan
       if (mode === targetMode) return;
       if (targetMode === 'color') {
         delete obj.texture;
+        delete obj.tileMode;
         obj.color = obj.color || defaultColor;
       } else {
         delete obj.color;
@@ -838,6 +839,54 @@ function addAppearanceField(container, labelText, obj, defaultColor, onValueChan
     hint.textContent = 'No sprite textures available yet — add one to assets/images/platform-textures.json.';
     wrap.appendChild(hint);
   }
+
+  if (mode === 'sprite') addTileModeField(wrap, obj, onValueChange, rerender);
+
+  container.appendChild(wrap);
+}
+
+const TILE_MODE_LABELS = { stretch: 'Stretch', repeat: 'Repeat', maximise: 'Maximise' };
+const TILE_MODE_HINTS = {
+  stretch: 'One image stretched to cover the whole tile — simple, but distorts a sprite that isn’t naturally that shape.',
+  repeat: 'Tiles the sprite at its native size, repeating across the area — no stretching, but seams can show on odd sizes.',
+  maximise: 'Finds the largest rectangular block(s) within this connected same-tile area and stretches each one individually — good for big or irregularly-shaped areas (e.g. a staircase of the same tile) since each piece stays closer to square.',
+};
+
+/** Sprite-only tiling mode picker (Stretch/Repeat/Maximise — see levelFormat.js's
+ * decomposeMaximizedRegions for what Maximise actually does). Not shown for Color
+ * appearances, which have no texture to stretch/repeat/decompose. Undefined/missing
+ * `tileMode` means 'stretch' (today's only behavior, so old sections need no migration);
+ * that default is left unwritten rather than stamped in, matching how e.g. a moving
+ * platform's speeds/cell-span fall back silently elsewhere in this format. */
+function addTileModeField(container, obj, onValueChange, rerender) {
+  const currentMode = obj.tileMode || 'stretch';
+  const wrap = document.createElement('div');
+  wrap.className = 'field-row';
+  const label = document.createElement('label');
+  label.textContent = 'Tiling';
+  wrap.appendChild(label);
+
+  const toggle = document.createElement('div');
+  toggle.className = 'type-toggle';
+  ['stretch', 'repeat', 'maximise'].forEach((mode) => {
+    const btn = document.createElement('button');
+    btn.textContent = TILE_MODE_LABELS[mode];
+    btn.className = mode === currentMode ? 'primary' : '';
+    btn.addEventListener('click', () => {
+      if (mode === 'stretch') delete obj.tileMode;
+      else obj.tileMode = mode;
+      onValueChange();
+      rerender();
+    });
+    toggle.appendChild(btn);
+  });
+  wrap.appendChild(toggle);
+
+  const hint = document.createElement('p');
+  hint.className = 'hint';
+  hint.style.marginTop = '6px';
+  hint.textContent = TILE_MODE_HINTS[currentMode];
+  wrap.appendChild(hint);
 
   container.appendChild(wrap);
 }

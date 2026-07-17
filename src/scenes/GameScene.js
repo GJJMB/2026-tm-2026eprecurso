@@ -74,7 +74,7 @@ export default class GameScene extends Phaser.Scene {
       const cy = tile.y + tile.h / 2;
       const style = tile.style || {};
       const id = this._appearanceId('background', style);
-      const appearance = this._resolveAppearance(id, style.texture, style.color, BACKGROUND_COLOR);
+      const appearance = this._resolveAppearance(id, style.texture, style.color, BACKGROUND_COLOR, style.tileMode);
       this._makeAppearanceObject(cx, cy, tile.w, tile.h, appearance).setDepth(BACKGROUND_DEPTH);
     }
 
@@ -89,7 +89,7 @@ export default class GameScene extends Phaser.Scene {
       const style = tile.style || {};
       if (tile.kind === 'hazard') {
         const id = this._appearanceId('hazard', style);
-        const appearance = this._resolveAppearance(id, style.texture, style.color, HAZARD_COLOR);
+        const appearance = this._resolveAppearance(id, style.texture, style.color, HAZARD_COLOR, style.tileMode);
         this._addHazard(cx, cy, tile.w, tile.h, appearance);
       } else {
         // The ground baseline row and any elevated platform share the same style/texture,
@@ -97,7 +97,7 @@ export default class GameScene extends Phaser.Scene {
         const base = tile.isGroundRow ? 'ground-baseline' : 'ground-elevated';
         const fallback = tile.isGroundRow ? GROUND_COLOR : PLATFORM_COLOR;
         const id = this._appearanceId(base, style);
-        const appearance = this._resolveAppearance(id, style.texture, style.color, fallback);
+        const appearance = this._resolveAppearance(id, style.texture, style.color, fallback, style.tileMode);
         this._addPlatform(cx, cy, tile.w, tile.h, appearance);
       }
     }
@@ -115,7 +115,7 @@ export default class GameScene extends Phaser.Scene {
         const w = normalizeCellSpan(entity.widthCells) * plan.cellSize;
         const h = normalizeCellSpan(entity.heightCells) * plan.cellSize;
         const id = this._appearanceId('movingPlatform', entity);
-        const appearance = this._resolveAppearance(id, entity.texture, entity.color, MOVING_PLATFORM_COLOR);
+        const appearance = this._resolveAppearance(id, entity.texture, entity.color, MOVING_PLATFORM_COLOR, entity.tileMode);
         this._addMovingPlatform(entity.waypoints, w, h, appearance, entity.speeds);
       } else if (
         entity.type === ENTITY_TYPES.ENEMY_FALSE_FRIEND ||
@@ -217,10 +217,11 @@ export default class GameScene extends Phaser.Scene {
    * values in `style`. Folding the override into the key (not just the base id) is what
    * keeps two sections with different tileStyles for the same character from bleeding
    * into each other's cached appearance, while identical styles across sections/tiles
-   * still correctly share one resolved entry.
+   * still correctly share one resolved entry. `tileMode` is folded in too since it's part
+   * of the same override (see levelFormat.js's tileMode docs).
    */
   _appearanceId(base, style) {
-    return `${base}:${style.texture || ''}:${style.color || ''}`;
+    return `${base}:${style.texture || ''}:${style.color || ''}:${style.tileMode || ''}`;
   }
 
   /**
@@ -228,13 +229,15 @@ export default class GameScene extends Phaser.Scene {
    * (`texture`, if it names a loaded image) or a fill color (`color`, a CSS hex string or
    * numeric 0xRRGGBB), falling back to `fallbackColor` when neither is given. Cached by
    * `id` so e.g. every ground tile in a level only resolves/parses its style once, not
-   * once per tile instance.
+   * once per tile instance. `tileMode` ('stretch'/'repeat'/'maximise', see
+   * levelFormat.js) rides along unresolved — only _makeAppearanceObject needs it, and only
+   * when a texture is actually in play.
    */
-  _resolveAppearance(id, texture, color, fallbackColor) {
+  _resolveAppearance(id, texture, color, fallbackColor, tileMode) {
     if (this._appearanceCache.has(id)) return this._appearanceCache.get(id);
     let resolved;
     if (texture && this.textures.exists(texture)) {
-      resolved = { texture };
+      resolved = { texture, tileMode };
     } else if (color) {
       resolved = { color: typeof color === 'string' ? Phaser.Display.Color.HexStringToColor(color).color : color };
     } else {
@@ -244,10 +247,20 @@ export default class GameScene extends Phaser.Scene {
     return resolved;
   }
 
-  /** Builds a `w`x`h` game object at `x,y` per a resolved appearance — a stretched-to-fit
-   * Image if it names a texture, otherwise a flat-colored Rectangle. */
+  /**
+   * Builds a `w`x`h` game object at `x,y` per a resolved appearance. A flat-colored
+   * Rectangle if there's no texture. Otherwise: a repeating TileSprite (sprite tiled at
+   * its native size, no stretching) when `tileMode === 'repeat'`; a plain stretched-to-fit
+   * Image for everything else — 'stretch' explicitly, and 'maximise' too, since
+   * LevelLoader has already decomposed a 'maximise' tile into several near-square
+   * rectangles by the time it gets here (see levelFormat.js's decomposeMaximizedRegions) —
+   * each one just needs to fill its own w×h like any other stretched tile.
+   */
   _makeAppearanceObject(x, y, w, h, appearance) {
     if (appearance.texture) {
+      if (appearance.tileMode === 'repeat') {
+        return this.add.tileSprite(x, y, w, h, appearance.texture);
+      }
       const img = this.add.image(x, y, appearance.texture);
       img.setDisplaySize(w, h);
       return img;

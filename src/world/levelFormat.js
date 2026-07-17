@@ -24,6 +24,13 @@
  * and reusable across levels. A `texture` key always wins over `color` when both are
  * present; neither falls back to the game's built-in default color.
  *
+ * A texture'd appearance may also carry `tileMode: 'stretch' | 'repeat' | 'maximise'`
+ * (missing/'stretch' is the default — one image stretched across each run/rect, today's
+ * only historical behavior). 'repeat' tiles the sprite at native size instead of
+ * stretching it. 'maximise' decomposes that character's whole connected same-tile area
+ * (see decomposeMaximizedRegions) into the fewest largest rectangles and stretches each
+ * one individually, so a big or oddly-shaped area doesn't badly distort one giant image.
+ *
  * A grid isn't limited to the literal characters G/H/B: a section can define extra
  * "variant" characters in tileStyles (anything but `.`) — e.g. a second ground look
  * painted as its own brush in the editor — each with its own `{ color, texture }` and,
@@ -125,6 +132,128 @@ export function mergeRowRuns(rowStr) {
     i = j;
   }
   return runs;
+}
+
+/** 4-directional flood fill of every cell equal to `type` reachable from (startRow,
+ * startCol), marking each visited in `visited` as it goes. Returns the component's
+ * bounding box plus a same-sized local boolean mask (true where that cell belongs to the
+ * component) — the shape `largestRectangle` below operates on. */
+function floodFillComponent(grid, visited, startRow, startCol, type) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  let minRow = startRow;
+  let maxRow = startRow;
+  let minCol = startCol;
+  let maxCol = startCol;
+  const cells = [[startRow, startCol]];
+  visited[startRow][startCol] = true;
+  const stack = [[startRow, startCol]];
+
+  while (stack.length) {
+    const [r, c] = stack.pop();
+    for (const [nr, nc] of [
+      [r - 1, c],
+      [r + 1, c],
+      [r, c - 1],
+      [r, c + 1],
+    ]) {
+      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
+      if (visited[nr][nc] || grid[nr][nc] !== type) continue;
+      visited[nr][nc] = true;
+      cells.push([nr, nc]);
+      stack.push([nr, nc]);
+      if (nr < minRow) minRow = nr;
+      if (nr > maxRow) maxRow = nr;
+      if (nc < minCol) minCol = nc;
+      if (nc > maxCol) maxCol = nc;
+    }
+  }
+
+  const mask = Array.from({ length: maxRow - minRow + 1 }, () => new Array(maxCol - minCol + 1).fill(false));
+  for (const [r, c] of cells) mask[r - minRow][c - minCol] = true;
+  return { minRow, minCol, mask };
+}
+
+/** Largest all-true rectangle in a 0/1-ish boolean matrix, via the standard
+ * largest-rectangle-in-histogram trick applied row by row (each row's "histogram" is how
+ * many consecutive true cells stack up above it in the same column). O(rows*cols). */
+function largestRectangle(mask) {
+  const rows = mask.length;
+  const cols = mask[0].length;
+  const heights = new Array(cols).fill(0);
+  let best = null; // { top, left, width, height, area }
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) heights[c] = mask[r][c] ? heights[c] + 1 : 0;
+
+    // Largest rectangle in this row's histogram, via a stack of increasing bar heights.
+    const stack = [];
+    for (let i = 0; i <= cols; i++) {
+      const h = i === cols ? 0 : heights[i];
+      while (stack.length && heights[stack[stack.length - 1]] >= h) {
+        const height = heights[stack.pop()];
+        const left = stack.length ? stack[stack.length - 1] + 1 : 0;
+        const width = i - left;
+        const area = height * width;
+        if (height > 0 && (!best || area > best.area)) {
+          best = { top: r - height + 1, left, width, height, area };
+        }
+      }
+      stack.push(i);
+    }
+  }
+
+  return best;
+}
+
+/**
+ * Decomposes every connected region (4-directional flood fill, so diagonal touches don't
+ * count) of any character in `charsToMaximise` into the fewest largest-area axis-aligned
+ * rectangles — greedily carving out the biggest remaining rectangle, then repeating on
+ * what's left, until the whole region is covered. This is what the editor's "Maximise"
+ * sprite tiling mode (see addTileModeField in src/editor/main.js) uses so a big or
+ * irregularly-shaped same-tile area — e.g. a 5/4/3-wide staircase — renders as a handful
+ * of proportionally-stretched images (a 3x3, a 2x1, a 1x1 for that staircase) instead of
+ * one image stretched across the whole bounding box (which would badly distort the
+ * sprite) or a plain per-cell repeat.
+ *
+ * `grid` is a section's `grid` or `bgGrid`; `charsToMaximise` is the Set of characters
+ * whose tileStyles opted into 'maximise' (LevelLoader.build computes this, since only it
+ * has both the grid and that section's tileStyles at hand). Returns rects in grid space:
+ * `{ type, startRow, startCol, rowSpan, colSpan }[]`, unordered.
+ */
+export function decomposeMaximizedRegions(grid, charsToMaximise) {
+  if (!charsToMaximise || charsToMaximise.size === 0 || grid.length === 0) return [];
+
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const visited = Array.from({ length: rows }, () => new Array(cols).fill(false));
+  const rects = [];
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const type = grid[r][c];
+      if (visited[r][c] || type === CELL.EMPTY || !charsToMaximise.has(type)) continue;
+
+      const { minRow, minCol, mask } = floodFillComponent(grid, visited, r, c, type);
+      for (;;) {
+        const best = largestRectangle(mask);
+        if (!best) break;
+        rects.push({
+          type,
+          startRow: minRow + best.top,
+          startCol: minCol + best.left,
+          rowSpan: best.height,
+          colSpan: best.width,
+        });
+        for (let rr = best.top; rr < best.top + best.height; rr++) {
+          for (let cc = best.left; cc < best.left + best.width; cc++) mask[rr][cc] = false;
+        }
+      }
+    }
+  }
+
+  return rects;
 }
 
 /** Basic shape check used by both the editor (on import) and the game (defensive). */

@@ -1,4 +1,58 @@
-import { CELL_SIZE, ENTITY_TYPES, mergeRowRuns, rowToWorldY, colToWorldX, groundRow, tileStyleKind } from './levelFormat.js';
+import {
+  CELL_SIZE,
+  ENTITY_TYPES,
+  mergeRowRuns,
+  rowToWorldY,
+  colToWorldX,
+  groundRow,
+  tileStyleKind,
+  decomposeMaximizedRegions,
+} from './levelFormat.js';
+
+/**
+ * World-space tiles for one grid (a section's `grid` or `bgGrid`). Characters whose
+ * tileStyles opted into 'maximise' tiling (see levelFormat.js's decomposeMaximizedRegions)
+ * are pulled out of the normal per-row run merge and rendered as the fewest largest
+ * rectangles spanning their whole connected same-tile area instead; every other character
+ * keeps the simple, cheaper per-row merge (mergeRowRuns) — both feed the same tile shape,
+ * they just disagree on how many world-space cells one tile object covers.
+ */
+function buildLayerTiles(grid, { rows, groundTopY, cellSize, offsetX, tileStyles, lastRow, includeGroundRow, includeKind }) {
+  const out = [];
+  const maximiseChars = new Set(
+    Object.keys(tileStyles).filter((char) => {
+      const style = tileStyles[char];
+      return style && style.texture && style.tileMode === 'maximise';
+    })
+  );
+
+  const pushRect = (type, startRow, startCol, rowSpan, colSpan) => {
+    const tile = {
+      type,
+      x: colToWorldX(startCol, offsetX, cellSize),
+      y: rowToWorldY(startRow, rows, groundTopY, cellSize),
+      w: colSpan * cellSize,
+      h: rowSpan * cellSize,
+      style: tileStyles[type] || null,
+    };
+    if (includeGroundRow) tile.isGroundRow = startRow + rowSpan - 1 === lastRow;
+    if (includeKind) tile.kind = tileStyleKind(type, tileStyles);
+    out.push(tile);
+  };
+
+  for (const rect of decomposeMaximizedRegions(grid, maximiseChars)) {
+    pushRect(rect.type, rect.startRow, rect.startCol, rect.rowSpan, rect.colSpan);
+  }
+
+  grid.forEach((rowStr, row) => {
+    for (const run of mergeRowRuns(rowStr)) {
+      if (maximiseChars.has(run.type)) continue; // already covered by the maximise pass above
+      pushRect(run.type, row, run.startCol, 1, run.colSpan);
+    }
+  });
+
+  return out;
+}
 
 const LEVELS_SEQUENCE_KEY = 'levels';
 const LEVELS_SEQUENCE_PATH = 'assets/levels/levels.json';
@@ -115,39 +169,13 @@ export default class LevelLoader {
       maxRows = Math.max(maxRows, rows);
       const lastRow = groundRow(rows);
 
-      grid.forEach((rowStr, row) => {
-        const y = rowToWorldY(row, rows, groundTopY, cellSize);
-        for (const run of mergeRowRuns(rowStr)) {
-          tiles.push({
-            type: run.type,
-            x: colToWorldX(run.startCol, offsetX, cellSize),
-            y,
-            w: run.colSpan * cellSize,
-            h: cellSize,
-            isGroundRow: row === lastRow,
-            style: tileStyles[run.type] || null,
-            // 'ground' or 'hazard' — see tileStyleKind's docs on why the literal
-            // character alone isn't enough once a section defines its own variants.
-            kind: tileStyleKind(run.type, tileStyles),
-          });
-        }
-      });
-
+      const layerOpts = { rows, groundTopY, cellSize, offsetX, tileStyles, lastRow };
+      // 'ground'/'hazard' — see tileStyleKind's docs on why the literal character alone
+      // isn't enough once a section defines its own variants.
+      tiles.push(...buildLayerTiles(grid, { ...layerOpts, includeGroundRow: true, includeKind: true }));
       // Background layer: same row/col → world-space mapping as the foreground grid, but
       // no ground-baseline concept and no collision — purely a stacked decorative image.
-      bgGrid.forEach((rowStr, row) => {
-        const y = rowToWorldY(row, rows, groundTopY, cellSize);
-        for (const run of mergeRowRuns(rowStr)) {
-          bgTiles.push({
-            type: run.type,
-            x: colToWorldX(run.startCol, offsetX, cellSize),
-            y,
-            w: run.colSpan * cellSize,
-            h: cellSize,
-            style: tileStyles[run.type] || null,
-          });
-        }
-      });
+      bgTiles.push(...buildLayerTiles(bgGrid, { ...layerOpts, includeGroundRow: false, includeKind: false }));
 
       for (const entity of sectionEntities) {
         if (entity.type === ENTITY_TYPES.MOVING_PLATFORM) {
